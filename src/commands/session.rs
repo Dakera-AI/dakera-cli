@@ -2,8 +2,8 @@
 
 use anyhow::{Context, Result};
 use clap::ArgMatches;
-use serde::Serialize;
 use dakera_client::DakeraClient;
+use serde::Serialize;
 
 use crate::output;
 use crate::OutputFormat;
@@ -101,19 +101,12 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .and_then(|v| v.as_array())
                     .cloned()
                     .unwrap_or_default();
-                let total = body
-                    .get("total")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
+                let total = body.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
 
                 if sessions.is_empty() {
                     output::info("No sessions found");
                 } else {
-                    output::info(&format!(
-                        "Showing {} of {} sessions",
-                        sessions.len(),
-                        total
-                    ));
+                    output::info(&format!("Showing {} of {} sessions", sessions.len(), total));
                     let rows: Vec<SessionRow> = sessions
                         .iter()
                         .filter_map(|s| {
@@ -145,10 +138,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let response = client.session_memories(session_id).await?;
 
             if response.memories.is_empty() {
-                output::info(&format!(
-                    "No memories found for session '{}'",
-                    session_id
-                ));
+                output::info(&format!("No memories found for session '{}'", session_id));
             } else {
                 output::info(&format!(
                     "Found {} memories in session '{}' (total: {})",

@@ -2,10 +2,14 @@
 
 use anyhow::{Context, Result};
 use clap::ArgMatches;
+use dakera_client::{
+    AggregationRequest, ColumnUpsertRequest, DakeraClient, DeleteRequest, ExportRequest,
+    MultiVectorSearchRequest, QueryExplainRequest, QueryRequest, UnifiedQueryRequest,
+    UpsertRequest, Vector,
+};
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
-use dakera_client::{AggregationRequest, ColumnUpsertRequest, DeleteRequest, ExportRequest, MultiVectorSearchRequest, QueryExplainRequest, QueryRequest, UnifiedQueryRequest, UpsertRequest, Vector, DakeraClient};
 
 use crate::output;
 use crate::OutputFormat;
@@ -34,7 +38,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .with_context(|| "Failed to parse JSON. Expected array of vectors")?;
 
             let total = vectors.len();
-            output::info(&format!("Upserting {} vectors to namespace '{}'", total, namespace));
+            output::info(&format!(
+                "Upserting {} vectors to namespace '{}'",
+                total, namespace
+            ));
 
             let mut upserted = 0;
             for chunk in vectors.chunks(batch_size) {
@@ -43,7 +50,12 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 };
                 client.upsert(namespace, request).await?;
                 upserted += chunk.len();
-                println!("  Progress: {}/{} ({:.1}%)", upserted, total, (upserted as f64 / total as f64) * 100.0);
+                println!(
+                    "  Progress: {}/{} ({:.1}%)",
+                    upserted,
+                    total,
+                    (upserted as f64 / total as f64) * 100.0
+                );
             }
 
             output::success(&format!("Successfully upserted {} vectors", total));
@@ -52,7 +64,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         Some(("upsert-one", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
             let id = sub_matches.get_one::<String>("id").unwrap();
-            let values: Vec<f32> = sub_matches.get_many::<f32>("values")
+            let values: Vec<f32> = sub_matches
+                .get_many::<f32>("values")
                 .unwrap()
                 .copied()
                 .collect();
@@ -76,7 +89,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("query", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let values: Vec<f32> = sub_matches.get_many::<f32>("values")
+            let values: Vec<f32> = sub_matches
+                .get_many::<f32>("values")
                 .unwrap()
                 .copied()
                 .collect();
@@ -90,8 +104,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 None
             };
 
-            let mut request = QueryRequest::new(values, top_k)
-                .include_metadata(include_metadata);
+            let mut request = QueryRequest::new(values, top_k).include_metadata(include_metadata);
             if let Some(f) = filter {
                 request = request.with_filter(f);
             }
@@ -107,7 +120,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .map(|m| QueryResultRow {
                         id: m.id,
                         score: m.score,
-                        metadata: m.metadata.map(|h| serde_json::Value::Object(h.into_iter().collect())),
+                        metadata: m
+                            .metadata
+                            .map(|h| serde_json::Value::Object(h.into_iter().collect())),
                     })
                     .collect();
                 output::print_data(&rows, format);
@@ -136,7 +151,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .map(|m| QueryResultRow {
                         id: m.id,
                         score: m.score,
-                        metadata: m.metadata.map(|h| serde_json::Value::Object(h.into_iter().collect())),
+                        metadata: m
+                            .metadata
+                            .map(|h| serde_json::Value::Object(h.into_iter().collect())),
                     })
                     .collect();
                 output::print_data(&rows, format);
@@ -145,7 +162,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("delete", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let ids: Vec<String> = sub_matches.get_many::<String>("ids")
+            let ids: Vec<String> = sub_matches
+                .get_many::<String>("ids")
                 .map(|v| v.cloned().collect())
                 .unwrap_or_default();
             let all = sub_matches.get_flag("all");
@@ -191,7 +209,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let request: MultiVectorSearchRequest = serde_json::from_str(&content)
                 .context("Failed to parse multi-vector search JSON")?;
 
-            output::info(&format!("Running multi-vector search on namespace '{}'", namespace));
+            output::info(&format!(
+                "Running multi-vector search on namespace '{}'",
+                namespace
+            ));
             let response = client.multi_vector_search(namespace, request).await?;
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
             output::print_item(&json, format);
@@ -205,10 +226,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let content = fs::read_to_string(&file)
                 .with_context(|| format!("Failed to read file: {}", file.display()))?;
 
-            let request: UnifiedQueryRequest = serde_json::from_str(&content)
-                .context("Failed to parse unified query JSON")?;
+            let request: UnifiedQueryRequest =
+                serde_json::from_str(&content).context("Failed to parse unified query JSON")?;
 
-            output::info(&format!("Running unified query on namespace '{}'", namespace));
+            output::info(&format!(
+                "Running unified query on namespace '{}'",
+                namespace
+            ));
             let response = client.unified_query(namespace, request).await?;
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
             output::print_item(&json, format);
@@ -222,8 +246,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let content = fs::read_to_string(&file)
                 .with_context(|| format!("Failed to read file: {}", file.display()))?;
 
-            let request: AggregationRequest = serde_json::from_str(&content)
-                .context("Failed to parse aggregation JSON")?;
+            let request: AggregationRequest =
+                serde_json::from_str(&content).context("Failed to parse aggregation JSON")?;
 
             output::info(&format!("Running aggregation on namespace '{}'", namespace));
             let response = client.aggregate(namespace, request).await?;
@@ -253,18 +277,23 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("explain", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let values: Vec<f32> = sub_matches.get_many::<f32>("values")
+            let values: Vec<f32> = sub_matches
+                .get_many::<f32>("values")
                 .unwrap()
                 .copied()
                 .collect();
             let top_k = *sub_matches.get_one::<u32>("top-k").unwrap();
             let include_metadata = sub_matches.get_flag("include-metadata");
 
-            let request: QueryExplainRequest = serde_json::from_str(&serde_json::json!({
-                "vector": values,
-                "top_k": top_k,
-                "include_metadata": include_metadata,
-            }).to_string()).context("Failed to build explain request")?;
+            let request: QueryExplainRequest = serde_json::from_str(
+                &serde_json::json!({
+                    "vector": values,
+                    "top_k": top_k,
+                    "include_metadata": include_metadata,
+                })
+                .to_string(),
+            )
+            .context("Failed to build explain request")?;
 
             output::info(&format!("Explaining query on namespace '{}'", namespace));
             let response = client.explain_query(namespace, request).await?;
@@ -280,13 +309,19 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let content = fs::read_to_string(&file)
                 .with_context(|| format!("Failed to read file: {}", file.display()))?;
 
-            let request: ColumnUpsertRequest = serde_json::from_str(&content)
-                .context("Failed to parse column upsert JSON")?;
+            let request: ColumnUpsertRequest =
+                serde_json::from_str(&content).context("Failed to parse column upsert JSON")?;
 
             let count = request.ids.len();
-            output::info(&format!("Upserting {} vectors (column format) to namespace '{}'", count, namespace));
+            output::info(&format!(
+                "Upserting {} vectors (column format) to namespace '{}'",
+                count, namespace
+            ));
             client.upsert_columns(namespace, request).await?;
-            output::success(&format!("Successfully upserted {} vectors (column format)", count));
+            output::success(&format!(
+                "Successfully upserted {} vectors (column format)",
+                count
+            ));
         }
 
         _ => {

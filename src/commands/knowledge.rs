@@ -2,11 +2,11 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use serde::Serialize;
 use dakera_client::knowledge::{
     DeduplicateRequest, FullKnowledgeGraphRequest, KnowledgeGraphRequest, SummarizeRequest,
 };
 use dakera_client::DakeraClient;
+use serde::Serialize;
 
 use crate::output;
 use crate::OutputFormat;
@@ -204,10 +204,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 println!("Preview:");
                 println!("{}", response.summary);
             } else {
-                output::success(&format!(
-                    "Summarized {} memories",
-                    response.source_count
-                ));
+                output::success(&format!("Summarized {} memories", response.source_count));
                 if let Some(ref id) = response.new_memory_id {
                     output::info(&format!("New memory ID: {}", id));
                 }

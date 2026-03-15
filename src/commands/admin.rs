@@ -128,16 +128,23 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("optimize", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
-            let result =
-                admin_post(url, &format!("/admin/namespaces/{}/optimize", namespace), None).await?;
+            let result = admin_post(
+                url,
+                &format!("/admin/namespaces/{}/optimize", namespace),
+                None,
+            )
+            .await?;
             output::success(&format!("Namespace '{}' optimization started", namespace));
             print_value(&result, format);
         }
 
         Some(("index-stats", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
-            let result =
-                admin_get(url, &format!("/admin/indexes/stats?namespace={}", namespace)).await?;
+            let result = admin_get(
+                url,
+                &format!("/admin/indexes/stats?namespace={}", namespace),
+            )
+            .await?;
             output::info(&format!("Index stats for '{}'", namespace));
             print_value(&result, format);
         }
@@ -182,7 +189,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let value = sub.get_one::<String>("value").unwrap();
 
             // Try to parse value as JSON first, fall back to string
-            let json_value: Value = serde_json::from_str(value).unwrap_or(Value::String(value.clone()));
+            let json_value: Value =
+                serde_json::from_str(value).unwrap_or(Value::String(value.clone()));
             let body = serde_json::json!({ key: json_value });
             let result = admin_put(url, "/admin/config", &body).await?;
             output::success(&format!("Configuration updated: {} = {}", key, value));
@@ -262,12 +270,8 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .unwrap()
                     .insert("strategy".to_string(), Value::String(s.clone()));
             }
-            let result = admin_put(
-                url,
-                &format!("/admin/namespaces/{}/ttl", namespace),
-                &body,
-            )
-            .await?;
+            let result =
+                admin_put(url, &format!("/admin/namespaces/{}/ttl", namespace), &body).await?;
             output::success(&format!(
                 "TTL configured for '{}': {} seconds",
                 namespace, ttl_seconds

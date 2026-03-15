@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use serde::Serialize;
 use dakera_client::DakeraClient;
+use serde::Serialize;
 
 use crate::output;
 use crate::OutputFormat;
@@ -45,7 +45,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 std::process::exit(1);
             }
 
-            if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+            if !name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            {
                 output::error("Namespace name can only contain alphanumeric characters, hyphens, and underscores");
                 std::process::exit(1);
             }

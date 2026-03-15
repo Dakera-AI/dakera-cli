@@ -2,9 +2,9 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
+use dakera_client::{reqwest, CompactionRequest, DakeraClient};
 use nu_ansi_term::{Color, Style};
 use serde::Serialize;
-use dakera_client::{reqwest, CompactionRequest, DakeraClient};
 
 use crate::output;
 use crate::OutputFormat;
@@ -25,16 +25,27 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         Some(("diagnostics", _)) => {
             let diag = client.diagnostics().await?;
 
-            let pairs = [("Server Version", diag.system.version.clone()),
+            let pairs = [
+                ("Server Version", diag.system.version.clone()),
                 ("Rust Version", diag.system.rust_version.clone()),
                 ("Uptime", format_duration(diag.system.uptime_seconds)),
                 ("PID", diag.system.pid.to_string()),
-                ("Memory Used", format!("{} MB", diag.resources.memory_bytes / 1024 / 1024)),
+                (
+                    "Memory Used",
+                    format!("{} MB", diag.resources.memory_bytes / 1024 / 1024),
+                ),
                 ("Threads", diag.resources.thread_count.to_string()),
                 ("Open FDs", diag.resources.open_fds.to_string()),
-                ("Active Jobs", diag.active_jobs.to_string())];
+                ("Active Jobs", diag.active_jobs.to_string()),
+            ];
 
-            output::print_kv(&pairs.iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<_>>(), format);
+            output::print_kv(
+                &pairs
+                    .iter()
+                    .map(|(k, v)| (*k, v.clone()))
+                    .collect::<Vec<_>>(),
+                format,
+            );
 
             let cyan = Style::new().fg(Color::Cyan).bold();
             let green = Style::new().fg(Color::Green);
@@ -42,18 +53,42 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
             println!();
             println!("{}", cyan.paint("Component Health:"));
-            println!("  Storage: {} - {}",
-                if diag.components.storage.healthy { green.paint("OK") } else { red.paint("FAIL") },
-                diag.components.storage.message);
-            println!("  Search Engine: {} - {}",
-                if diag.components.search_engine.healthy { green.paint("OK") } else { red.paint("FAIL") },
-                diag.components.search_engine.message);
-            println!("  Cache: {} - {}",
-                if diag.components.cache.healthy { green.paint("OK") } else { red.paint("FAIL") },
-                diag.components.cache.message);
-            println!("  gRPC: {} - {}",
-                if diag.components.grpc.healthy { green.paint("OK") } else { red.paint("FAIL") },
-                diag.components.grpc.message);
+            println!(
+                "  Storage: {} - {}",
+                if diag.components.storage.healthy {
+                    green.paint("OK")
+                } else {
+                    red.paint("FAIL")
+                },
+                diag.components.storage.message
+            );
+            println!(
+                "  Search Engine: {} - {}",
+                if diag.components.search_engine.healthy {
+                    green.paint("OK")
+                } else {
+                    red.paint("FAIL")
+                },
+                diag.components.search_engine.message
+            );
+            println!(
+                "  Cache: {} - {}",
+                if diag.components.cache.healthy {
+                    green.paint("OK")
+                } else {
+                    red.paint("FAIL")
+                },
+                diag.components.cache.message
+            );
+            println!(
+                "  gRPC: {} - {}",
+                if diag.components.grpc.healthy {
+                    green.paint("OK")
+                } else {
+                    red.paint("FAIL")
+                },
+                diag.components.grpc.message
+            );
         }
 
         Some(("jobs", _)) => {
@@ -82,13 +117,21 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
             match job {
                 Some(j) => {
-                    let pairs = [("ID", j.id),
+                    let pairs = [
+                        ("ID", j.id),
                         ("Type", j.job_type),
                         ("Status", j.status),
                         ("Progress", format!("{}%", j.progress)),
                         ("Created", format_timestamp(j.created_at)),
-                        ("Message", j.message.unwrap_or_else(|| "-".to_string()))];
-                    output::print_kv(&pairs.iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<_>>(), format);
+                        ("Message", j.message.unwrap_or_else(|| "-".to_string())),
+                    ];
+                    output::print_kv(
+                        &pairs
+                            .iter()
+                            .map(|(k, v)| (*k, v.clone()))
+                            .collect::<Vec<_>>(),
+                        format,
+                    );
                 }
                 None => {
                     output::error(&format!("Job '{}' not found", id));

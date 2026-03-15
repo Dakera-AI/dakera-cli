@@ -13,7 +13,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
     match matches.subcommand() {
         Some(("overview", sub_matches)) => {
             let period = sub_matches.get_one::<String>("period").map(|s| s.as_str());
-            let namespace = sub_matches.get_one::<String>("namespace").map(|s| s.as_str());
+            let namespace = sub_matches
+                .get_one::<String>("namespace")
+                .map(|s| s.as_str());
 
             let overview = client.analytics_overview(period, namespace).await?;
 
@@ -22,10 +24,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 ("Avg Latency", format!("{:.2}ms", overview.avg_latency_ms)),
                 ("P95 Latency", format!("{:.2}ms", overview.p95_latency_ms)),
                 ("P99 Latency", format!("{:.2}ms", overview.p99_latency_ms)),
-                (
-                    "Queries/sec",
-                    format!("{:.2}", overview.queries_per_second),
-                ),
+                ("Queries/sec", format!("{:.2}", overview.queries_per_second)),
                 ("Error Rate", format!("{:.4}", overview.error_rate)),
                 (
                     "Cache Hit Rate",
@@ -48,7 +47,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("latency", sub_matches)) => {
             let period = sub_matches.get_one::<String>("period").map(|s| s.as_str());
-            let namespace = sub_matches.get_one::<String>("namespace").map(|s| s.as_str());
+            let namespace = sub_matches
+                .get_one::<String>("namespace")
+                .map(|s| s.as_str());
 
             let latency = client.analytics_latency(period, namespace).await?;
 
@@ -83,7 +84,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("throughput", sub_matches)) => {
             let period = sub_matches.get_one::<String>("period").map(|s| s.as_str());
-            let namespace = sub_matches.get_one::<String>("namespace").map(|s| s.as_str());
+            let namespace = sub_matches
+                .get_one::<String>("namespace")
+                .map(|s| s.as_str());
 
             let throughput = client.analytics_throughput(period, namespace).await?;
 
@@ -114,7 +117,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         }
 
         Some(("storage", sub_matches)) => {
-            let namespace = sub_matches.get_one::<String>("namespace").map(|s| s.as_str());
+            let namespace = sub_matches
+                .get_one::<String>("namespace")
+                .map(|s| s.as_str());
 
             let storage = client.analytics_storage(namespace).await?;
 

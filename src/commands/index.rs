@@ -15,12 +15,30 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
             let info = client.get_namespace(namespace).await?;
 
-            let pairs = [("Namespace", namespace.clone()),
+            let pairs = [
+                ("Namespace", namespace.clone()),
                 ("Vector Count", info.vector_count.to_string()),
-                ("Dimension", info.dimensions.map(|d| d.to_string()).unwrap_or_else(|| "Not set".to_string())),
-                ("Index Type", info.index_type.clone().unwrap_or_else(|| "Auto".to_string()))];
+                (
+                    "Dimension",
+                    info.dimensions
+                        .map(|d| d.to_string())
+                        .unwrap_or_else(|| "Not set".to_string()),
+                ),
+                (
+                    "Index Type",
+                    info.index_type
+                        .clone()
+                        .unwrap_or_else(|| "Auto".to_string()),
+                ),
+            ];
 
-            output::print_kv(&pairs.iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<_>>(), format);
+            output::print_kv(
+                &pairs
+                    .iter()
+                    .map(|(k, v)| (*k, v.clone()))
+                    .collect::<Vec<_>>(),
+                format,
+            );
         }
 
         Some(("fulltext-stats", sub_matches)) => {
@@ -52,7 +70,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 }
             }
 
-            output::info(&format!("Triggering {} index rebuild for '{}'...", index_type, namespace));
+            output::info(&format!(
+                "Triggering {} index rebuild for '{}'...",
+                index_type, namespace
+            ));
 
             // Note: This would call a rebuild endpoint when available
             // For now, compaction can help optimize indexes

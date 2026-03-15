@@ -4,10 +4,13 @@ mod commands;
 mod config;
 mod output;
 
-use clap::{Arg, ArgAction, Command, value_parser};
+use clap::{value_parser, Arg, ArgAction, Command};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::commands::{admin, agent, analytics, health, index, keys, knowledge, memory, namespace, ops, session, vector};
+use crate::commands::{
+    admin, agent, analytics, health, index, keys, knowledge, memory, namespace, ops, session,
+    vector,
+};
 use crate::config::Config;
 
 /// Output format for CLI results
@@ -517,7 +520,11 @@ fn build_memory_command() -> Command {
             Command::new("store")
                 .about("Store a memory for an agent")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
-                .arg(Arg::new("content").required(true).help("Memory content text"))
+                .arg(
+                    Arg::new("content")
+                        .required(true)
+                        .help("Memory content text"),
+                )
                 .arg(
                     Arg::new("type")
                         .short('t')
@@ -591,7 +598,11 @@ fn build_memory_command() -> Command {
             Command::new("forget")
                 .about("Delete a memory")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
-                .arg(Arg::new("memory_id").required(true).help("Memory ID to delete")),
+                .arg(
+                    Arg::new("memory_id")
+                        .required(true)
+                        .help("Memory ID to delete"),
+                ),
         )
         .subcommand(
             Command::new("search")
@@ -899,7 +910,11 @@ fn build_admin_command() -> Command {
         .subcommand(
             Command::new("optimize")
                 .about("Optimize a namespace (compact indexes, reclaim space)")
-                .arg(Arg::new("namespace").required(true).help("Namespace to optimize")),
+                .arg(
+                    Arg::new("namespace")
+                        .required(true)
+                        .help("Namespace to optimize"),
+                ),
         )
         .subcommand(
             Command::new("index-stats")
@@ -985,12 +1000,18 @@ fn build_admin_command() -> Command {
         .subcommand(
             Command::new("backup-restore")
                 .about("Restore from a backup")
-                .arg(Arg::new("backup_id").required(true).help("Backup ID to restore")),
+                .arg(
+                    Arg::new("backup_id")
+                        .required(true)
+                        .help("Backup ID to restore"),
+                ),
         )
         .subcommand(
-            Command::new("backup-delete")
-                .about("Delete a backup")
-                .arg(Arg::new("backup_id").required(true).help("Backup ID to delete")),
+            Command::new("backup-delete").about("Delete a backup").arg(
+                Arg::new("backup_id")
+                    .required(true)
+                    .help("Backup ID to delete"),
+            ),
         )
         .subcommand(
             Command::new("configure-ttl")
@@ -1017,7 +1038,11 @@ fn build_keys_command() -> Command {
         .subcommand(
             Command::new("create")
                 .about("Create a new API key")
-                .arg(Arg::new("name").required(true).help("Human-readable name for the key"))
+                .arg(
+                    Arg::new("name")
+                        .required(true)
+                        .help("Human-readable name for the key"),
+                )
                 .arg(
                     Arg::new("permissions")
                         .short('p')
@@ -1115,14 +1140,12 @@ fn build_analytics_command() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("storage")
-                .about("Storage statistics")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Filter by namespace"),
-                ),
+            Command::new("storage").about("Storage statistics").arg(
+                Arg::new("namespace")
+                    .short('n')
+                    .long("namespace")
+                    .help("Filter by namespace"),
+            ),
         )
 }
 

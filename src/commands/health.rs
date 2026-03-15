@@ -1,8 +1,8 @@
 //! Health check command
 
 use anyhow::Result;
-use nu_ansi_term::{Color, Style};
 use dakera_client::DakeraClient;
+use nu_ansi_term::{Color, Style};
 
 use crate::output;
 use crate::OutputFormat;
@@ -26,18 +26,63 @@ pub async fn execute(url: &str, detailed: bool, format: OutputFormat) -> Result<
                 let yellow = Style::new().fg(Color::Yellow);
                 let cyan = Style::new().fg(Color::Cyan).bold();
 
-                let pairs = [("Status", if h.healthy { green.paint("Healthy").to_string() } else { red.paint("Unhealthy").to_string() }),
-                    ("Live", if live { green.paint("Yes").to_string() } else { red.paint("No").to_string() }),
-                    ("Ready", ready.as_ref().map(|r| if r.ready { green.paint("Yes").to_string() } else { yellow.paint("No").to_string() }).unwrap_or_else(|| "Unknown".to_string())),
-                    ("Version", h.version.unwrap_or_else(|| "Unknown".to_string())),
-                    ("Uptime", h.uptime_seconds.map(format_duration).unwrap_or_else(|| "Unknown".to_string()))];
+                let pairs = [
+                    (
+                        "Status",
+                        if h.healthy {
+                            green.paint("Healthy").to_string()
+                        } else {
+                            red.paint("Unhealthy").to_string()
+                        },
+                    ),
+                    (
+                        "Live",
+                        if live {
+                            green.paint("Yes").to_string()
+                        } else {
+                            red.paint("No").to_string()
+                        },
+                    ),
+                    (
+                        "Ready",
+                        ready
+                            .as_ref()
+                            .map(|r| {
+                                if r.ready {
+                                    green.paint("Yes").to_string()
+                                } else {
+                                    yellow.paint("No").to_string()
+                                }
+                            })
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                    ),
+                    (
+                        "Version",
+                        h.version.unwrap_or_else(|| "Unknown".to_string()),
+                    ),
+                    (
+                        "Uptime",
+                        h.uptime_seconds
+                            .map(format_duration)
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                    ),
+                ];
 
-                output::print_kv(&pairs.iter().map(|(k, v)| (*k, v.clone())).collect::<Vec<_>>(), format);
+                output::print_kv(
+                    &pairs
+                        .iter()
+                        .map(|(k, v)| (*k, v.clone()))
+                        .collect::<Vec<_>>(),
+                    format,
+                );
 
                 if let Some(diag) = diagnostics {
                     println!();
                     println!("{}", cyan.paint("System Diagnostics:"));
-                    println!("  Memory Used: {} MB", diag.resources.memory_bytes / 1024 / 1024);
+                    println!(
+                        "  Memory Used: {} MB",
+                        diag.resources.memory_bytes / 1024 / 1024
+                    );
                     println!("  Threads: {}", diag.resources.thread_count);
                     println!("  Open FDs: {}", diag.resources.open_fds);
                     println!("  Active Jobs: {}", diag.active_jobs);

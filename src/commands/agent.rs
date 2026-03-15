@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use serde::Serialize;
 use dakera_client::DakeraClient;
+use serde::Serialize;
 
 use crate::output;
 use crate::OutputFormat;
@@ -101,15 +101,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 ),
                 (
                     "Oldest Memory",
-                    stats
-                        .oldest_memory_at
-                        .unwrap_or_else(|| "-".to_string()),
+                    stats.oldest_memory_at.unwrap_or_else(|| "-".to_string()),
                 ),
                 (
                     "Newest Memory",
-                    stats
-                        .newest_memory_at
-                        .unwrap_or_else(|| "-".to_string()),
+                    stats.newest_memory_at.unwrap_or_else(|| "-".to_string()),
                 ),
             ];
 

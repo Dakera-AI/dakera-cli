@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use serde::Serialize;
 use dakera_client::memory::{
-    ConsolidateRequest, FeedbackRequest, MemoryType, RecallRequest,
-    StoreMemoryRequest, UpdateImportanceRequest, UpdateMemoryRequest,
+    ConsolidateRequest, FeedbackRequest, MemoryType, RecallRequest, StoreMemoryRequest,
+    UpdateImportanceRequest, UpdateMemoryRequest,
 };
 use dakera_client::DakeraClient;
+use serde::Serialize;
 
 use crate::output;
 use crate::OutputFormat;
@@ -75,8 +75,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let top_k = *sub_matches.get_one::<usize>("top-k").unwrap();
             let memory_type = sub_matches.get_one::<String>("type");
 
-            let mut request = RecallRequest::new(agent_id.clone(), query.clone())
-                .with_top_k(top_k);
+            let mut request = RecallRequest::new(agent_id.clone(), query.clone()).with_top_k(top_k);
 
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
@@ -137,8 +136,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
 
-            let request =
-                dakera_client::memory::ForgetRequest::by_ids(agent_id.clone(), vec![memory_id.clone()]);
+            let request = dakera_client::memory::ForgetRequest::by_ids(
+                agent_id.clone(),
+                vec![memory_id.clone()],
+            );
             let response = client.forget(request).await?;
 
             output::success(&format!(
@@ -153,8 +154,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let top_k = *sub_matches.get_one::<usize>("top-k").unwrap();
             let memory_type = sub_matches.get_one::<String>("type");
 
-            let mut request = RecallRequest::new(agent_id.clone(), query.clone())
-                .with_top_k(top_k);
+            let mut request = RecallRequest::new(agent_id.clone(), query.clone()).with_top_k(top_k);
 
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
