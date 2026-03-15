@@ -68,10 +68,8 @@ pub fn print_item<T: Serialize>(item: &T, format: OutputFormat) {
 pub fn print_kv(pairs: &[(&str, String)], format: OutputFormat) {
     match format {
         OutputFormat::Json | OutputFormat::Compact => {
-            let map: std::collections::HashMap<&str, &str> = pairs
-                .iter()
-                .map(|(k, v)| (*k, v.as_str()))
-                .collect();
+            let map: std::collections::HashMap<&str, &str> =
+                pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
             if matches!(format, OutputFormat::Json) {
                 println!("{}", serde_json::to_string_pretty(&map).unwrap_or_default());
             } else {
