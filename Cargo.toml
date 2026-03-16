@@ -16,7 +16,7 @@ path = "src/main.rs"
 clap = { version = "4.4", default-features = false, features = ["std", "help", "usage", "error-context", "env"] }
 
 # Dakera client SDK
-dakera-client = { git = "ssh://git@github.com/Dakera-AI/dakera-rs.git", branch = "main" }
+dakera-client = "0.2.0"
 
 # Async runtime
 tokio = { version = "1.37", features = ["full"] }
