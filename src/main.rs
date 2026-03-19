@@ -8,7 +8,7 @@ use clap::{value_parser, Arg, ArgAction, Command};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::commands::{
-    admin, agent, analytics, health, index, keys, knowledge, memory, namespace, ops, session,
+    admin, agent, analytics, health, index, init, keys, knowledge, memory, namespace, ops, session,
     vector,
 };
 use crate::config::Config;
@@ -60,6 +60,7 @@ fn build_cli() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Enable verbose output"),
         )
+        .subcommand(Command::new("init").about("Interactive setup wizard — configure server URL and default namespace"))
         .subcommand(
             Command::new("health")
                 .about("Check server health and connectivity")
@@ -1179,6 +1180,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Execute command
     match matches.subcommand() {
+        Some(("init", _)) => {
+            init::execute().await?;
+        }
         Some(("health", sub_matches)) => {
             let detailed = sub_matches.get_flag("detailed");
             health::execute(&url, detailed, format).await?;
@@ -1216,19 +1220,23 @@ async fn main() -> anyhow::Result<()> {
         Some(("keys", sub_matches)) => {
             keys::execute(&url, sub_matches, format).await?;
         }
-        Some(("config", sub_matches)) => {
-            if sub_matches.get_flag("show") {
-                println!("Server URL: {}", config.server_url);
-                println!("Default namespace: {}", config.default_namespace);
-            } else {
-                println!("Configuration:");
-                println!("  Server URL: {}", config.server_url);
-                println!("  Default namespace: {}", config.default_namespace);
-                println!();
-                println!("Set via environment variables:");
-                println!("  DAKERA_URL - Server URL");
-                println!("  DAKERA_NAMESPACE - Default namespace");
+        Some(("config", _)) => {
+            println!("Configuration:");
+            println!("  Server URL:        {}", config.server_url);
+            println!("  Default namespace: {}", config.default_namespace);
+            if let Some(path) = Config::config_path() {
+                println!(
+                    "  Config file:       {}{}",
+                    path.display(),
+                    if path.exists() { "" } else { " (not found)" }
+                );
             }
+            println!();
+            println!("Environment overrides:");
+            println!("  DAKERA_URL       - Server URL");
+            println!("  DAKERA_NAMESPACE - Default namespace");
+            println!();
+            println!("Run `dk init` to create or update the config file.");
         }
         _ => {
             build_cli().print_help()?;

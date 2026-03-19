@@ -35,3 +35,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Colors (using nu-ansi-term which is vendored)
 nu-ansi-term = "0.50"
+
+# Config file support
+toml = "0.8"
+dirs = "5.0"
