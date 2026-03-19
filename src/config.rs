@@ -58,20 +58,31 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Return the path to the config file (`~/.config/dakera/config.toml`).
+    /// Return the path to the config file (`~/.dakera/config.toml`).
     pub fn config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("dakera").join("config.toml"))
+        dirs::home_dir().map(|d| d.join(".dakera").join("config.toml"))
     }
 
-    /// Load config: file → env overrides.
+    /// Load config using the active profile, then apply env overrides.
     pub fn load() -> Self {
+        Self::load_inner(None)
+    }
+
+    /// Load config forcing a specific named profile, then apply env overrides.
+    pub fn load_with_profile(profile_name: &str) -> Self {
+        Self::load_inner(Some(profile_name))
+    }
+
+    fn load_inner(profile_override: Option<&str>) -> Self {
         let mut cfg = Config::default();
 
         if let Some(path) = Self::config_path() {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(file_cfg) = toml::from_str::<ConfigFile>(&content) {
-                    let active = &file_cfg.active_profile;
-                    if let Some(profile) = file_cfg.profiles.get(active) {
+                    let active = profile_override
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| file_cfg.active_profile.clone());
+                    if let Some(profile) = file_cfg.profiles.get(&active) {
                         cfg.server_url = profile.url.clone();
                         cfg.default_namespace = profile.default_namespace.clone();
                     }
@@ -89,11 +100,22 @@ impl Config {
         cfg
     }
 
+    /// Read the raw on-disk config file (for profile listing / inspection).
+    pub fn read_config_file() -> anyhow::Result<ConfigFile> {
+        let path = Self::config_path()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+        if !path.exists() {
+            return Ok(ConfigFile::default());
+        }
+        let content = fs::read_to_string(&path)?;
+        Ok(toml::from_str::<ConfigFile>(&content).unwrap_or_default())
+    }
+
     /// Persist a profile to the config file.
     /// If this is the first profile, it becomes the active profile.
     pub fn write_profile(name: &str, profile: Profile) -> anyhow::Result<()> {
         let path = Self::config_path()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
 
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -115,6 +137,34 @@ impl Config {
         fs::write(&path, toml::to_string_pretty(&file_cfg)?)?;
         Ok(())
     }
+
+    /// Switch the active profile in the config file.
+    pub fn use_profile(name: &str) -> anyhow::Result<()> {
+        let path = Self::config_path()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut file_cfg = if path.exists() {
+            let content = fs::read_to_string(&path)?;
+            toml::from_str::<ConfigFile>(&content).unwrap_or_default()
+        } else {
+            ConfigFile::default()
+        };
+
+        if !file_cfg.profiles.contains_key(name) {
+            anyhow::bail!(
+                "Profile '{}' not found. Run `dk config profile list` to see available profiles.",
+                name
+            );
+        }
+
+        file_cfg.active_profile = name.to_string();
+        fs::write(&path, toml::to_string_pretty(&file_cfg)?)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -126,6 +176,18 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.server_url, "http://localhost:3000");
         assert_eq!(config.default_namespace, "default");
+    }
+
+    #[test]
+    fn test_config_path_is_home_dakera() {
+        if let Some(path) = Config::config_path() {
+            let path_str = path.to_string_lossy();
+            assert!(
+                path_str.contains(".dakera"),
+                "Config path should be under ~/.dakera, got: {}",
+                path_str
+            );
+        }
     }
 
     #[test]

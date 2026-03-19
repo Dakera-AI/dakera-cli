@@ -4,6 +4,7 @@ pub mod admin;
 pub mod agent;
 pub mod analytics;
 pub mod completion;
+pub mod config;
 pub mod health;
 pub mod index;
 pub mod init;
