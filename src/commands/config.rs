@@ -26,10 +26,7 @@ async fn cmd_show(_matches: &clap::ArgMatches) -> anyhow::Result<()> {
     println!("Configuration:");
     println!("  Server URL:        {}", config.server_url);
     println!("  Default namespace: {}", config.default_namespace);
-    println!(
-        "  Active profile:    {}",
-        file_cfg.active_profile
-    );
+    println!("  Active profile:    {}", file_cfg.active_profile);
     if let Some(path) = Config::config_path() {
         println!(
             "  Config file:       {}{}",
@@ -77,11 +74,7 @@ async fn cmd_profile_use(matches: &clap::ArgMatches) -> anyhow::Result<()> {
     let name = matches.get_one::<String>("name").unwrap();
     Config::use_profile(name)?;
     let green = Color::Green.bold();
-    println!(
-        "  {} Switched to profile '{}'.",
-        green.paint("✓"),
-        name
-    );
+    println!("  {} Switched to profile '{}'.", green.paint("✓"), name);
     Ok(())
 }
 
@@ -95,7 +88,10 @@ async fn cmd_profile_list() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<40} {:<20} {}", "NAME", "URL", "NAMESPACE", "ACTIVE");
+    println!(
+        "{:<20} {:<40} {:<20} ACTIVE",
+        "NAME", "URL", "NAMESPACE"
+    );
     println!("{}", "-".repeat(90));
 
     let mut names: Vec<&String> = file_cfg.profiles.keys().collect();

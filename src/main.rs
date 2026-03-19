@@ -132,9 +132,11 @@ fn build_config_command() -> Command {
                         ),
                 )
                 .subcommand(
-                    Command::new("use")
-                        .about("Switch the active profile")
-                        .arg(Arg::new("name").required(true).help("Profile name to activate")),
+                    Command::new("use").about("Switch the active profile").arg(
+                        Arg::new("name")
+                            .required(true)
+                            .help("Profile name to activate"),
+                    ),
                 )
                 .subcommand(Command::new("list").about("List all profiles")),
         )
