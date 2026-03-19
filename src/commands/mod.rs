@@ -5,6 +5,7 @@ pub mod agent;
 pub mod analytics;
 pub mod health;
 pub mod index;
+pub mod init;
 pub mod keys;
 pub mod knowledge;
 pub mod memory;
