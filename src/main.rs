@@ -8,8 +8,8 @@ use clap::{value_parser, Arg, ArgAction, Command};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::commands::{
-    admin, agent, analytics, health, index, init, keys, knowledge, memory, namespace, ops, session,
-    vector,
+    admin, agent, analytics, completion, health, index, init, keys, knowledge, memory, namespace,
+    ops, session, vector,
 };
 use crate::config::Config;
 
@@ -95,6 +95,37 @@ fn build_cli() -> Command {
                         .action(ArgAction::SetTrue)
                         .help("Show current configuration"),
                 ),
+        )
+        .subcommand(build_completion_command())
+}
+
+fn build_completion_command() -> Command {
+    Command::new("completion")
+        .about("Generate shell completion scripts")
+        .long_about(
+            "Generate shell completion scripts for bash, zsh, or fish.\n\
+             \n\
+             Print to stdout:\n\
+             \n  dk completion bash\n\
+             \n  dk completion zsh\n\
+             \n  dk completion fish\n\
+             \nInstall automatically:\n\
+             \n  dk completion bash --install\n\
+             \n  dk completion zsh --install\n\
+             \n  dk completion fish --install\n\
+             \nDynamic completion provides namespace and agent names from the live server.",
+        )
+        .arg(
+            Arg::new("shell")
+                .required(true)
+                .value_parser(["bash", "zsh", "fish"])
+                .help("Shell to generate completion for"),
+        )
+        .arg(
+            Arg::new("install")
+                .long("install")
+                .action(ArgAction::SetTrue)
+                .help("Install the completion script to the appropriate location"),
         )
 }
 
@@ -1222,6 +1253,11 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(("keys", sub_matches)) => {
             keys::execute(&url, sub_matches, format).await?;
+        }
+        Some(("completion", sub_matches)) => {
+            let shell = sub_matches.get_one::<String>("shell").unwrap();
+            let install = sub_matches.get_flag("install");
+            completion::execute(shell, install)?;
         }
         Some(("config", _)) => {
             println!("Configuration:");
