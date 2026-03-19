@@ -188,9 +188,9 @@ _dk() {{
     typeset -A opt_args
 
     _arguments -C \
-        '(-u --url)'{-u,--url}'[Server URL]:url:' \
-        '(-f --format)'{-f,--format}'[Output format]:format:(table json compact)' \
-        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \
+        '(-u --url)'{{-u,--url}}'[Server URL]:url:' \
+        '(-f --format)'{{-f,--format}}'[Output format]:format:(table json compact)' \
+        '(-v --verbose)'{{-v,--verbose}}'[Enable verbose output]' \
         '1: :->cmd' \
         '*: :->args'
 
@@ -285,7 +285,7 @@ _dk() {{
                         'feedback:Submit recall feedback'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces' \
+                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces' \
                         '--agent-id[Agent ID]:agent:_dk_agents'
                     [[ $state == subcmd ]] && _describe 'memory subcommand' m_cmds
                     ;;
@@ -330,7 +330,7 @@ _dk() {{
                         'storage:Storage statistics'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
+                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces'
                     [[ $state == subcmd ]] && _describe 'analytics subcommand' an_cmds
                     ;;
                 admin)
@@ -354,7 +354,7 @@ _dk() {{
                         'configure-ttl:Configure TTL for namespace'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
+                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces'
                     [[ $state == subcmd ]] && _describe 'admin subcommand' ad_cmds
                     ;;
                 keys)
