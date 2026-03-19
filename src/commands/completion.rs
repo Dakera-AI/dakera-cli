@@ -154,43 +154,42 @@ complete -F _dk dk
 
 // ─── Zsh ─────────────────────────────────────────────────────────────────────
 
-fn zsh_script() -> String {
-    format!(
-        r#"#compdef dk
+fn zsh_script() -> &'static str {
+    r#"#compdef dk
 # zsh completion for dk
 # Place this file as _dk in a directory on your $fpath, e.g. ~/.zfunc/_dk
 # Then add: fpath=(~/.zfunc $fpath) and autoload -Uz compinit && compinit
 
-_dk_namespaces() {{
+_dk_namespaces() {
     local -a ns
     if command -v jq >/dev/null 2>&1; then
-        ns=(${{(f)"$(dk namespace list --format json 2>/dev/null | jq -r '.[].name' 2>/dev/null)"}})
+        ns=(${(f)"$(dk namespace list --format json 2>/dev/null | jq -r '.[].name' 2>/dev/null)"})
     elif command -v python3 >/dev/null 2>&1; then
-        ns=(${{(f)"$(dk namespace list --format json 2>/dev/null \
-            | python3 -c "import json,sys; [print(n['name']) for n in json.load(sys.stdin)]" 2>/dev/null)"}})
+        ns=(${(f)"$(dk namespace list --format json 2>/dev/null \
+            | python3 -c "import json,sys; [print(n['name']) for n in json.load(sys.stdin)]" 2>/dev/null)"})
     fi
     _describe 'namespace' ns
-}}
+}
 
-_dk_agents() {{
+_dk_agents() {
     local -a agents
     if command -v jq >/dev/null 2>&1; then
-        agents=(${{(f)"$(dk agent list --format json 2>/dev/null | jq -r '.[].agent_id' 2>/dev/null)"}})
+        agents=(${(f)"$(dk agent list --format json 2>/dev/null | jq -r '.[].agent_id' 2>/dev/null)"})
     elif command -v python3 >/dev/null 2>&1; then
-        agents=(${{(f)"$(dk agent list --format json 2>/dev/null \
-            | python3 -c "import json,sys; [print(n['agent_id']) for n in json.load(sys.stdin)]" 2>/dev/null)"}})
+        agents=(${(f)"$(dk agent list --format json 2>/dev/null \
+            | python3 -c "import json,sys; [print(n['agent_id']) for n in json.load(sys.stdin)]" 2>/dev/null)"})
     fi
     _describe 'agent' agents
-}}
+}
 
-_dk() {{
+_dk() {
     local context state line
     typeset -A opt_args
 
     _arguments -C \
-        '(-u --url)'{{-u,--url}}'[Server URL]:url:' \
-        '(-f --format)'{{-f,--format}}'[Output format]:format:(table json compact)' \
-        '(-v --verbose)'{{-v,--verbose}}'[Enable verbose output]' \
+        '(-u --url)'{-u,--url}'[Server URL]:url:' \
+        '(-f --format)'{-f,--format}'[Output format]:format:(table json compact)' \
+        '(-v --verbose)'{-v,--verbose}'[Enable verbose output]' \
         '1: :->cmd' \
         '*: :->args'
 
@@ -216,7 +215,7 @@ _dk() {{
             _describe 'command' commands
             ;;
         args)
-            case ${{line[1]}} in
+            case ${line[1]} in
                 namespace)
                     local ns_cmds=(
                         'list:List all namespaces'
@@ -228,7 +227,7 @@ _dk() {{
                     case $state in
                         subcmd) _describe 'namespace subcommand' ns_cmds ;;
                         ns_args)
-                            case ${{line[1]}} in
+                            case ${line[1]} in
                                 get|create|delete) _message 'namespace name' ;;
                             esac
                             ;;
@@ -285,7 +284,7 @@ _dk() {{
                         'feedback:Submit recall feedback'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces' \
+                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces' \
                         '--agent-id[Agent ID]:agent:_dk_agents'
                     [[ $state == subcmd ]] && _describe 'memory subcommand' m_cmds
                     ;;
@@ -330,7 +329,7 @@ _dk() {{
                         'storage:Storage statistics'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces'
+                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
                     [[ $state == subcmd ]] && _describe 'analytics subcommand' an_cmds
                     ;;
                 admin)
@@ -354,7 +353,7 @@ _dk() {{
                         'configure-ttl:Configure TTL for namespace'
                     )
                     _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{{--namespace,-n}}'[Namespace]:namespace:_dk_namespaces'
+                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
                     [[ $state == subcmd ]] && _describe 'admin subcommand' ad_cmds
                     ;;
                 keys)
@@ -380,18 +379,16 @@ _dk() {{
             esac
             ;;
     esac
-}}
+}
 
 _dk "$@"
 "#
-    )
 }
 
 // ─── Fish ────────────────────────────────────────────────────────────────────
 
-fn fish_script() -> String {
-    format!(
-        r#"# fish completion for dk
+fn fish_script() -> &'static str {
+    r#"# fish completion for dk
 # Place this file at ~/.config/fish/completions/dk.fish
 
 function __dk_no_subcommand
@@ -557,7 +554,6 @@ complete -c dk -n '__dk_using_subcommand completion' -l install -d 'Install comp
 # health flags
 complete -c dk -n '__dk_using_subcommand health' -l detailed -d 'Show detailed health info'
 "#
-    )
 }
 
 // ─── Install paths ────────────────────────────────────────────────────────────
