@@ -609,7 +609,7 @@ pub fn execute(shell: &str, install: bool) -> Result<()> {
             let script = zsh_script();
             if install {
                 let path = zsh_install_path()?;
-                write_completion(&path, &script)?;
+                write_completion(&path, script)?;
                 output::success(&format!("Zsh completion installed to {}", path.display()));
                 println!();
                 println!("To activate, ensure these lines are in your ~/.zshrc:");
@@ -625,7 +625,7 @@ pub fn execute(shell: &str, install: bool) -> Result<()> {
             let script = fish_script();
             if install {
                 let path = fish_install_path()?;
-                write_completion(&path, &script)?;
+                write_completion(&path, script)?;
                 output::success(&format!("Fish completion installed to {}", path.display()));
                 println!();
                 println!("Completion is active immediately in new fish sessions.");
