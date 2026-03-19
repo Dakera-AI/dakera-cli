@@ -88,10 +88,7 @@ async fn cmd_profile_list() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!(
-        "{:<20} {:<40} {:<20} ACTIVE",
-        "NAME", "URL", "NAMESPACE"
-    );
+    println!("{:<20} {:<40} {:<20} ACTIVE", "NAME", "URL", "NAMESPACE");
     println!("{}", "-".repeat(90));
 
     let mut names: Vec<&String> = file_cfg.profiles.keys().collect();
