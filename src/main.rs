@@ -8,8 +8,8 @@ use clap::{value_parser, Arg, ArgAction, Command};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::commands::{
-    admin, agent, analytics, completion, health, index, init, keys, knowledge, memory, namespace,
-    ops, session, vector,
+    admin, agent, analytics, completion, config as config_cmd, health, index, init, keys,
+    knowledge, memory, namespace, ops, session, vector,
 };
 use crate::config::Config;
 
@@ -60,6 +60,13 @@ fn build_cli() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Enable verbose output"),
         )
+        .arg(
+            Arg::new("profile")
+                .short('p')
+                .long("profile")
+                .env("DAKERA_PROFILE")
+                .help("Named server profile to use (overrides active_profile in config)"),
+        )
         .subcommand(
             Command::new("init")
                 .about("Interactive setup wizard — configure server URL and default namespace"),
@@ -86,17 +93,51 @@ fn build_cli() -> Command {
         .subcommand(build_analytics_command())
         .subcommand(build_admin_command())
         .subcommand(build_keys_command())
-        .subcommand(
-            Command::new("config")
-                .about("Show or set configuration")
-                .arg(
-                    Arg::new("show")
-                        .long("show")
-                        .action(ArgAction::SetTrue)
-                        .help("Show current configuration"),
-                ),
-        )
+        .subcommand(build_config_command())
         .subcommand(build_completion_command())
+}
+
+fn build_config_command() -> Command {
+    Command::new("config")
+        .about("Show configuration or manage server profiles")
+        .arg(
+            Arg::new("show")
+                .long("show")
+                .action(ArgAction::SetTrue)
+                .help("Show current configuration (default action)"),
+        )
+        .subcommand(
+            Command::new("profile")
+                .about("Manage named server profiles")
+                .subcommand(
+                    Command::new("add")
+                        .about("Add or update a named profile")
+                        .arg(
+                            Arg::new("name")
+                                .required(true)
+                                .help("Profile name (e.g. local, staging, prod)"),
+                        )
+                        .arg(
+                            Arg::new("url")
+                                .short('u')
+                                .long("url")
+                                .required(true)
+                                .help("Server URL for this profile"),
+                        )
+                        .arg(
+                            Arg::new("namespace")
+                                .short('n')
+                                .long("namespace")
+                                .help("Default namespace for this profile"),
+                        ),
+                )
+                .subcommand(
+                    Command::new("use")
+                        .about("Switch the active profile")
+                        .arg(Arg::new("name").required(true).help("Profile name to activate")),
+                )
+                .subcommand(Command::new("list").about("List all profiles")),
+        )
 }
 
 fn build_completion_command() -> Command {
@@ -1186,10 +1227,7 @@ fn build_analytics_command() -> Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load configuration
-    let config = Config::load();
-
-    // Parse CLI arguments
+    // Parse CLI arguments first so we can read --profile before loading config
     let matches = build_cli().get_matches();
 
     // Initialize logging if verbose
@@ -1199,6 +1237,12 @@ async fn main() -> anyhow::Result<()> {
             .with(tracing_subscriber::fmt::layer())
             .init();
     }
+
+    // Load configuration, honouring --profile / DAKERA_PROFILE if provided
+    let config = match matches.get_one::<String>("profile") {
+        Some(p) => Config::load_with_profile(p),
+        None => Config::load(),
+    };
 
     // Get URL from args or config
     let cli_url = matches.get_one::<String>("url").unwrap();
@@ -1259,23 +1303,8 @@ async fn main() -> anyhow::Result<()> {
             let install = sub_matches.get_flag("install");
             completion::execute(shell, install)?;
         }
-        Some(("config", _)) => {
-            println!("Configuration:");
-            println!("  Server URL:        {}", config.server_url);
-            println!("  Default namespace: {}", config.default_namespace);
-            if let Some(path) = Config::config_path() {
-                println!(
-                    "  Config file:       {}{}",
-                    path.display(),
-                    if path.exists() { "" } else { " (not found)" }
-                );
-            }
-            println!();
-            println!("Environment overrides:");
-            println!("  DAKERA_URL       - Server URL");
-            println!("  DAKERA_NAMESPACE - Default namespace");
-            println!();
-            println!("Run `dk init` to create or update the config file.");
+        Some(("config", sub_matches)) => {
+            config_cmd::execute(sub_matches).await?;
         }
         _ => {
             build_cli().print_help()?;
