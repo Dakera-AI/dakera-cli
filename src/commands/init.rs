@@ -16,7 +16,10 @@ pub async fn execute() -> Result<()> {
     let dim = Style::new().dimmed();
 
     println!("{}", cyan.paint("Welcome to Dakera!"));
-    println!("{}", dim.paint("This wizard sets up your local configuration."));
+    println!(
+        "{}",
+        dim.paint("This wizard sets up your local configuration.")
+    );
     println!();
 
     // ── Step 1: Server URL ─────────────────────────────────────────────────
@@ -57,7 +60,10 @@ pub async fn execute() -> Result<()> {
     // ── Step 3: Default namespace ──────────────────────────────────────────
     let ns = prompt_default("Default namespace", "default")?;
 
-    if !ns.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !ns
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         output::error("Namespace name may only contain letters, digits, hyphens, and underscores.");
         return Ok(());
     }
@@ -66,7 +72,11 @@ pub async fn execute() -> Result<()> {
     if connected {
         match client.list_namespaces().await {
             Ok(names) if names.contains(&ns) => {
-                println!("  {} Namespace '{}' exists on server.", green.paint("✓"), ns);
+                println!(
+                    "  {} Namespace '{}' exists on server.",
+                    green.paint("✓"),
+                    ns
+                );
             }
             Ok(_) => {
                 println!(

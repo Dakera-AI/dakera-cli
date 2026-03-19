@@ -60,7 +60,10 @@ fn build_cli() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Enable verbose output"),
         )
-        .subcommand(Command::new("init").about("Interactive setup wizard — configure server URL and default namespace"))
+        .subcommand(
+            Command::new("init")
+                .about("Interactive setup wizard — configure server URL and default namespace"),
+        )
         .subcommand(
             Command::new("health")
                 .about("Check server health and connectivity")
