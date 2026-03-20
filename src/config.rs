@@ -209,4 +209,77 @@ mod tests {
         assert_eq!(profile.url, "https://api.example.com");
         assert_eq!(profile.default_namespace, "agents");
     }
+
+    #[test]
+    fn test_profile_default_values() {
+        let p = Profile::default();
+        assert_eq!(p.url, "http://localhost:3000");
+        assert_eq!(p.default_namespace, "default");
+    }
+
+    #[test]
+    fn test_config_file_default_active_profile() {
+        let cfg = ConfigFile::default();
+        assert_eq!(cfg.active_profile, "default");
+        assert!(cfg.profiles.is_empty());
+    }
+
+    #[test]
+    fn test_config_file_multiple_profiles_roundtrip() {
+        let mut cfg = ConfigFile::default();
+        cfg.active_profile = "staging".to_string();
+        cfg.profiles.insert(
+            "prod".to_string(),
+            Profile {
+                url: "https://prod.example.com".to_string(),
+                default_namespace: "prod-ns".to_string(),
+            },
+        );
+        cfg.profiles.insert(
+            "staging".to_string(),
+            Profile {
+                url: "https://staging.example.com".to_string(),
+                default_namespace: "staging-ns".to_string(),
+            },
+        );
+        let serialized = toml::to_string_pretty(&cfg).unwrap();
+        let deserialized: ConfigFile = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.active_profile, "staging");
+        assert_eq!(deserialized.profiles.len(), 2);
+        assert_eq!(deserialized.profiles["prod"].url, "https://prod.example.com");
+        assert_eq!(deserialized.profiles["staging"].default_namespace, "staging-ns");
+    }
+
+    #[test]
+    fn test_profile_default_namespace_missing_from_toml() {
+        // When default_namespace is absent, serde should fill in "default"
+        let toml_str = r#"url = "https://example.com""#;
+        let profile: Profile = toml::from_str(toml_str).unwrap();
+        assert_eq!(profile.default_namespace, "default");
+    }
+
+    #[test]
+    fn test_config_file_active_profile_defaults_when_absent() {
+        // A config file with no active_profile field should default to "default"
+        let toml_str = "[profiles.prod]\nurl = \"https://prod.example.com\"\n";
+        let cfg: ConfigFile = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.active_profile, "default");
+    }
+
+    #[test]
+    fn test_config_file_nonexistent_active_profile_yields_no_match() {
+        // active_profile points to a name not in profiles — load_inner would fall back to defaults
+        let toml_str = "active_profile = \"missing\"\n[profiles.prod]\nurl = \"https://prod.example.com\"\n";
+        let cfg: ConfigFile = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.active_profile, "missing");
+        assert!(cfg.profiles.get("missing").is_none());
+    }
+
+    #[test]
+    fn test_config_load_returns_config_type() {
+        // Smoke test: load() returns a Config without panicking
+        let cfg = Config::load();
+        assert!(!cfg.server_url.is_empty());
+        assert!(!cfg.default_namespace.is_empty());
+    }
 }
