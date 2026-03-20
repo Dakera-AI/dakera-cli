@@ -24,13 +24,13 @@ jobs:
             os: windows-latest
             artifact: dk.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - run: cargo build --release --target ${{ matrix.target }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dk-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
@@ -39,7 +39,7 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo publish
         env:
@@ -52,7 +52,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v2
         with:
