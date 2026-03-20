@@ -100,21 +100,33 @@ mod tests {
     #[test]
     fn test_print_data_json_no_panic() {
         let data = vec![
-            TestRow { id: 1, name: "alice".into() },
-            TestRow { id: 2, name: "bob".into() },
+            TestRow {
+                id: 1,
+                name: "alice".into(),
+            },
+            TestRow {
+                id: 2,
+                name: "bob".into(),
+            },
         ];
         print_data(&data, OutputFormat::Json);
     }
 
     #[test]
     fn test_print_data_compact_no_panic() {
-        let data = vec![TestRow { id: 1, name: "test".into() }];
+        let data = vec![TestRow {
+            id: 1,
+            name: "test".into(),
+        }];
         print_data(&data, OutputFormat::Compact);
     }
 
     #[test]
     fn test_print_data_table_no_panic() {
-        let data = vec![TestRow { id: 1, name: "test".into() }];
+        let data = vec![TestRow {
+            id: 1,
+            name: "test".into(),
+        }];
         print_data(&data, OutputFormat::Table);
     }
 
@@ -126,7 +138,10 @@ mod tests {
 
     #[test]
     fn test_print_item_all_formats_no_panic() {
-        let item = TestRow { id: 42, name: "example".into() };
+        let item = TestRow {
+            id: 42,
+            name: "example".into(),
+        };
         print_item(&item, OutputFormat::Json);
         print_item(&item, OutputFormat::Compact);
         print_item(&item, OutputFormat::Table);
@@ -145,10 +160,16 @@ mod tests {
 
     #[test]
     fn test_json_compact_differ_in_whitespace() {
-        let data = vec![TestRow { id: 1, name: "x".into() }];
+        let data = vec![TestRow {
+            id: 1,
+            name: "x".into(),
+        }];
         let pretty = serde_json::to_string_pretty(&data).unwrap();
         let compact = serde_json::to_string(&data).unwrap();
-        assert!(pretty.len() > compact.len(), "Pretty JSON should be longer than compact");
+        assert!(
+            pretty.len() > compact.len(),
+            "Pretty JSON should be longer than compact"
+        );
     }
 
     #[test]
@@ -163,7 +184,10 @@ mod tests {
 
     #[test]
     fn test_print_data_json_output_is_valid_json() {
-        let data = vec![TestRow { id: 1, name: "test".into() }];
+        let data = vec![TestRow {
+            id: 1,
+            name: "test".into(),
+        }];
         let s = serde_json::to_string_pretty(&data).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert!(parsed.is_array());

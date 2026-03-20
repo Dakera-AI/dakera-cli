@@ -29,7 +29,7 @@ impl Default for Profile {
 }
 
 /// On-disk TOML config structure.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[serde(default = "default_profile_name")]
     pub active_profile: String,
@@ -39,6 +39,15 @@ pub struct ConfigFile {
 
 fn default_profile_name() -> String {
     "default".to_string()
+}
+
+impl Default for ConfigFile {
+    fn default() -> Self {
+        Self {
+            active_profile: default_profile_name(),
+            profiles: HashMap::new(),
+        }
+    }
 }
 
 /// Runtime config resolved from file + env overrides.
@@ -246,8 +255,14 @@ mod tests {
         let deserialized: ConfigFile = toml::from_str(&serialized).unwrap();
         assert_eq!(deserialized.active_profile, "staging");
         assert_eq!(deserialized.profiles.len(), 2);
-        assert_eq!(deserialized.profiles["prod"].url, "https://prod.example.com");
-        assert_eq!(deserialized.profiles["staging"].default_namespace, "staging-ns");
+        assert_eq!(
+            deserialized.profiles["prod"].url,
+            "https://prod.example.com"
+        );
+        assert_eq!(
+            deserialized.profiles["staging"].default_namespace,
+            "staging-ns"
+        );
     }
 
     #[test]
@@ -269,7 +284,8 @@ mod tests {
     #[test]
     fn test_config_file_nonexistent_active_profile_yields_no_match() {
         // active_profile points to a name not in profiles — load_inner would fall back to defaults
-        let toml_str = "active_profile = \"missing\"\n[profiles.prod]\nurl = \"https://prod.example.com\"\n";
+        let toml_str =
+            "active_profile = \"missing\"\n[profiles.prod]\nurl = \"https://prod.example.com\"\n";
         let cfg: ConfigFile = toml::from_str(toml_str).unwrap();
         assert_eq!(cfg.active_profile, "missing");
         assert!(cfg.profiles.get("missing").is_none());
