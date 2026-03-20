@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-03-20
+
+### Fixed
+
+- `ConfigFile` now implements `Default` using `default_profile_name()` — fixes profile name inconsistency on fresh installs
+- Rustfmt formatting fixes
+
+### Added
+
+- Unit tests for config and output modules (DAK-173)
+
+### Chore
+
+- Upgrade GitHub Actions runners to Node.js 24 compatible versions
+
+## [0.3.0] - 2026-03-19
+
+### Added
+
+- `dk init` onboarding wizard with file-based config (DX-1)
+- `dk completion bash|zsh|fish [--install]` — shell completion generation and auto-install (DX-2)
+- Profile management: `dk profile list|create|switch|delete|show` (DX-3)
+
+### Fixed
+
+- zsh completion format-string brace escaping
+- Cleaned up `&'static str` returns
+
+### Security
+
+- Add explicit `GITHUB_TOKEN` permissions to CI workflow
+
 ## [0.2.0] - 2025-03-15
 
 ### Added
