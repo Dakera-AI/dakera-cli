@@ -1,6 +1,6 @@
 [package]
 name = "dakera-cli"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 description = "Command-line interface for Dakera AI Agent Memory Platform"
@@ -16,7 +16,7 @@ path = "src/main.rs"
 clap = { version = "4.4", default-features = false, features = ["std", "help", "usage", "error-context", "env"] }
 
 # Dakera client SDK
-dakera-client = "0.2.0"
+dakera-client = "0.6"
 
 # Async runtime
 tokio = { version = "1.37", features = ["full"] }
