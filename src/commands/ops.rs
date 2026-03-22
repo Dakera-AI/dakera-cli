@@ -164,6 +164,15 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
         Some(("shutdown", sub_matches)) => {
             let yes = sub_matches.get_flag("yes");
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            if dry_run {
+                output::info(
+                    "[dry-run] Would send graceful shutdown request to the server (no action taken)",
+                );
+                output::info("[dry-run] Re-run without --dry-run to initiate the shutdown");
+                return Ok(());
+            }
 
             if !yes {
                 output::warning("This will gracefully shutdown the Dakera server");
