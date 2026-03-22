@@ -63,6 +63,16 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         Some(("delete", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").unwrap();
             let yes = sub_matches.get_flag("yes");
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            if dry_run {
+                output::info(&format!(
+                    "[dry-run] Would delete namespace '{}' and all its vectors (no action taken)",
+                    name
+                ));
+                output::info("[dry-run] Re-run without --dry-run to proceed with deletion");
+                return Ok(());
+            }
 
             if !yes {
                 output::warning(&format!(

@@ -51,6 +51,16 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
             let index_type = sub_matches.get_one::<String>("index-type").unwrap();
             let yes = sub_matches.get_flag("yes");
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            if dry_run {
+                output::info(&format!(
+                    "[dry-run] Would rebuild {} index for namespace '{}' (no action taken)",
+                    index_type, namespace
+                ));
+                output::info("[dry-run] Re-run without --dry-run to proceed with the rebuild");
+                return Ok(());
+            }
 
             if !yes {
                 output::warning(&format!(

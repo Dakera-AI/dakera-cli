@@ -2,6 +2,7 @@
 
 mod commands;
 mod config;
+pub mod error;
 mod output;
 
 use clap::{value_parser, Arg, ArgAction, Command};
@@ -37,6 +38,9 @@ fn build_cli() -> Command {
         .version(env!("CARGO_PKG_VERSION"))
         .author("Dakera Team")
         .about("Dakera CLI - Manage your AI agent memory platform from the command line")
+        .after_help(
+            "Examples:\n  dk health\n  dk namespace list\n  dk memory store my-agent 'Completed task X' --importance 0.8\n  dk memory recall my-agent 'recent tasks' --top-k 5\n  dk vector upsert -n my-ns --file vectors.json\n  dk completion zsh --install\n\nError exit codes:\n  0  success\n  1  general error\n  2  connection error (server unreachable)\n  3  not found\n  4  permission denied\n  5  invalid input\n  6  server error",
+        )
         .arg(
             Arg::new("url")
                 .short('u')
@@ -175,6 +179,9 @@ fn build_completion_command() -> Command {
 fn build_namespace_command() -> Command {
     Command::new("namespace")
         .about("Manage namespaces")
+        .after_help(
+            "Examples:\n  dk namespace list\n  dk namespace get my-ns\n  dk namespace create my-ns\n  dk namespace delete my-ns --dry-run\n  dk namespace delete my-ns --yes",
+        )
         .subcommand(Command::new("list").about("List all namespaces"))
         .subcommand(
             Command::new("get")
@@ -195,7 +202,8 @@ fn build_namespace_command() -> Command {
         )
         .subcommand(
             Command::new("delete")
-                .about("Delete a namespace")
+                .about("Delete a namespace and all its data")
+                .after_help("Examples:\n  dk namespace delete my-ns --dry-run\n  dk namespace delete my-ns --yes")
                 .arg(Arg::new("name").required(true).help("Namespace name"))
                 .arg(
                     Arg::new("yes")
@@ -203,6 +211,12 @@ fn build_namespace_command() -> Command {
                         .long("yes")
                         .action(ArgAction::SetTrue)
                         .help("Skip confirmation prompt"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Show what would be deleted without making any changes"),
                 ),
         )
 }
@@ -330,6 +344,7 @@ fn build_vector_command() -> Command {
         .subcommand(
             Command::new("delete")
                 .about("Delete vectors by ID")
+                .after_help("Examples:\n  dk vector delete -n my-ns --ids id1,id2 --dry-run\n  dk vector delete -n my-ns --all --dry-run\n  dk vector delete -n my-ns --ids id1,id2 --yes")
                 .arg(
                     Arg::new("namespace")
                         .short('n')
@@ -356,6 +371,12 @@ fn build_vector_command() -> Command {
                         .long("yes")
                         .action(ArgAction::SetTrue)
                         .help("Skip confirmation prompt"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Show what would be deleted without making any changes"),
                 ),
         )
         .subcommand(
@@ -526,6 +547,7 @@ fn build_index_command() -> Command {
         .subcommand(
             Command::new("rebuild")
                 .about("Rebuild index for a namespace")
+                .after_help("Examples:\n  dk index rebuild -n my-ns --dry-run\n  dk index rebuild -n my-ns --index-type vector --yes")
                 .arg(
                     Arg::new("namespace")
                         .short('n')
@@ -546,6 +568,12 @@ fn build_index_command() -> Command {
                         .long("yes")
                         .action(ArgAction::SetTrue)
                         .help("Skip confirmation prompt"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Show what would be rebuilt without making any changes"),
                 ),
         )
 }
@@ -580,12 +608,19 @@ fn build_ops_command() -> Command {
         .subcommand(
             Command::new("shutdown")
                 .about("Gracefully shutdown the server")
+                .after_help("Examples:\n  dk ops shutdown --dry-run\n  dk ops shutdown --yes")
                 .arg(
                     Arg::new("yes")
                         .short('y')
                         .long("yes")
                         .action(ArgAction::SetTrue)
                         .help("Skip confirmation prompt"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Show what would happen without initiating the shutdown"),
                 ),
         )
         .subcommand(Command::new("metrics").about("Show server metrics"))
@@ -1228,7 +1263,7 @@ fn build_analytics_command() -> Command {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     // Parse CLI arguments first so we can read --profile before loading config
     let matches = build_cli().get_matches();
 
@@ -1240,6 +1275,40 @@ async fn main() -> anyhow::Result<()> {
             .init();
     }
 
+    // Resolve output format early so we can use it in error reporting
+    let format_str = matches.get_one::<String>("format").unwrap();
+    let format = OutputFormat::from(format_str.as_str());
+
+    if let Err(err) = run(matches, format).await {
+        // Classify the error and choose the appropriate exit code
+        let cli_err = error::classify(&err);
+        let exit_code = cli_err.exit_code();
+
+        match format {
+            OutputFormat::Json | OutputFormat::Compact => {
+                let json_err = error::JsonError {
+                    error: true,
+                    code: cli_err.error_code(),
+                    exit_code,
+                    message: cli_err.to_string(),
+                };
+                let s = if matches!(format, OutputFormat::Json) {
+                    serde_json::to_string_pretty(&json_err)
+                } else {
+                    serde_json::to_string(&json_err)
+                };
+                eprintln!("{}", s.unwrap_or_else(|_| cli_err.to_string()));
+            }
+            OutputFormat::Table => {
+                output::error(&cli_err.to_string());
+            }
+        }
+
+        std::process::exit(exit_code);
+    }
+}
+
+async fn run(matches: clap::ArgMatches, format: OutputFormat) -> anyhow::Result<()> {
     // Load configuration, honouring --profile / DAKERA_PROFILE if provided
     let config = match matches.get_one::<String>("profile") {
         Some(p) => Config::load_with_profile(p),
@@ -1253,10 +1322,6 @@ async fn main() -> anyhow::Result<()> {
     } else {
         config.server_url.clone()
     };
-
-    // Get output format
-    let format_str = matches.get_one::<String>("format").unwrap();
-    let format = OutputFormat::from(format_str.as_str());
 
     // Execute command
     match matches.subcommand() {

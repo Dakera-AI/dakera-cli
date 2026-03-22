@@ -168,6 +168,28 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .unwrap_or_default();
             let all = sub_matches.get_flag("all");
             let yes = sub_matches.get_flag("yes");
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            if dry_run {
+                if all {
+                    output::info(&format!(
+                        "[dry-run] Would delete ALL vectors in namespace '{}' (no action taken)",
+                        namespace
+                    ));
+                } else if ids.is_empty() {
+                    output::error("No vector IDs specified. Use --ids or --all");
+                    std::process::exit(1);
+                } else {
+                    output::info(&format!(
+                        "[dry-run] Would delete {} vector(s) from namespace '{}': {} (no action taken)",
+                        ids.len(),
+                        namespace,
+                        ids.join(", ")
+                    ));
+                }
+                output::info("[dry-run] Re-run without --dry-run to proceed with deletion");
+                return Ok(());
+            }
 
             if all {
                 if !yes {
