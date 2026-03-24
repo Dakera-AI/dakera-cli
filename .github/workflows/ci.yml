@@ -3,9 +3,19 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'CHANGELOG*'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'CHANGELOG*'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
