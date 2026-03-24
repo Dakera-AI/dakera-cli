@@ -15,11 +15,13 @@ jobs:
             os: ubuntu-latest
             artifact: dk
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: ubuntu-latest
             artifact: dk
+            use_zigbuild: true
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: ubuntu-latest
             artifact: dk
+            use_zigbuild: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: dk.exe
@@ -28,7 +30,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Install cargo-zigbuild
+        if: matrix.use_zigbuild == true
+        run: |
+          pip install ziglang
+          cargo install cargo-zigbuild
+      - name: Build (zigbuild)
+        if: matrix.use_zigbuild == true
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+      - name: Build (native)
+        if: matrix.use_zigbuild != true
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
