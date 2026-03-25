@@ -36,6 +36,8 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: check
       - run: cargo check
 
   clippy:
@@ -51,6 +53,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: clippy
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -74,4 +78,6 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
       - run: cargo test
