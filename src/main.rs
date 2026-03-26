@@ -624,6 +624,10 @@ fn build_ops_command() -> Command {
                 ),
         )
         .subcommand(Command::new("metrics").about("Show server metrics"))
+        .subcommand(
+            Command::new("stats")
+                .about("Show server statistics (version, state, vector count, uptime)"),
+        )
 }
 
 fn build_memory_command() -> Command {

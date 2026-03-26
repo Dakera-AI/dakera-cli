@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use dakera_client::{reqwest, CompactionRequest, DakeraClient};
+use dakera_client::{reqwest, CompactionRequest, DakeraClient, OpsStats};
 use nu_ansi_term::{Color, Style};
 use serde::Serialize;
 
@@ -22,6 +22,32 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
     let client = DakeraClient::new(url)?;
 
     match matches.subcommand() {
+        Some(("stats", _)) => {
+            let stats: OpsStats = client.ops_stats().await?;
+
+            let state_label = match stats.state.as_str() {
+                "healthy" => format!("{} (healthy)", stats.state),
+                "degraded" => format!("{} (degraded — check storage)", stats.state),
+                other => other.to_string(),
+            };
+
+            let pairs = [
+                ("Server Version", stats.version.clone()),
+                ("State", state_label),
+                ("Total Vectors", stats.total_vectors.to_string()),
+                ("Namespaces", stats.namespace_count.to_string()),
+                ("Uptime", format_duration(stats.uptime_seconds)),
+            ];
+
+            output::print_kv(
+                &pairs
+                    .iter()
+                    .map(|(k, v)| (*k, v.clone()))
+                    .collect::<Vec<_>>(),
+                format,
+            );
+        }
+
         Some(("diagnostics", _)) => {
             let diag = client.diagnostics().await?;
 
