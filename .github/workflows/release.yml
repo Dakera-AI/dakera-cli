@@ -63,13 +63,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v8
+      - name: Rename artifacts with platform names
+        run: |
+          mv dk-x86_64-unknown-linux-gnu/dk dk-x86_64-unknown-linux-gnu/dk-x86_64-unknown-linux-gnu
+          mv dk-aarch64-apple-darwin/dk dk-aarch64-apple-darwin/dk-aarch64-apple-darwin
+          mv dk-x86_64-apple-darwin/dk dk-x86_64-apple-darwin/dk-x86_64-apple-darwin
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dk-x86_64-unknown-linux-gnu/dk
-            dk-aarch64-apple-darwin/dk
-            dk-x86_64-apple-darwin/dk
+            dk-x86_64-unknown-linux-gnu/dk-x86_64-unknown-linux-gnu
+            dk-aarch64-apple-darwin/dk-aarch64-apple-darwin
+            dk-x86_64-apple-darwin/dk-x86_64-apple-darwin
             dk-x86_64-pc-windows-msvc/dk.exe
 
   deploy-binary:
