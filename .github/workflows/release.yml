@@ -15,13 +15,11 @@ jobs:
             os: ubuntu-latest
             artifact: dk
           - target: aarch64-apple-darwin
-            os: ubuntu-latest
+            os: macos-latest
             artifact: dk
-            use_zigbuild: true
           - target: x86_64-apple-darwin
-            os: ubuntu-latest
+            os: macos-latest
             artifact: dk
-            use_zigbuild: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: dk.exe
