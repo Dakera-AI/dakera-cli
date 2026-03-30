@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-30
+
+### Added
+
+- `dk ops stats` — new subcommand that calls `GET /v1/ops/stats` and displays server version, state, total vectors, namespace count, and uptime (DAK-918)
+- Bumps `dakera-client 0.6.2 → 0.8.6` to access `DakeraClient::ops_stats()` and `OpsStats`
+
+### CI
+
+- Migrate to self-hosted ARM runner for faster cross-compilation (DAK-910)
+- Fix target directory race condition between parallel CI jobs (#15)
+- Reduce GitHub Actions cost via zigbuild, concurrency limits, and paths-ignore (DAK-840)
+
 ## [0.4.1] - 2026-03-24
 
 ### CI
