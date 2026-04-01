@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 
-Command-line interface for [Dakera](https://github.com/dakera-ai/dakera) -- manage your AI agent memory from the terminal.
+Command-line interface for [Dakera](https://github.com/dakera-ai/dakera) — manage your AI agent memory from the terminal. Store, recall, search, and inspect memories, vectors, sessions, and knowledge graphs with a single `dk` command.
 
 ## Installation
 
@@ -14,6 +14,16 @@ cargo install dakera-cli
 ```
 
 Pre-built binaries for Linux, macOS (Intel and Apple Silicon), and Windows are available on the [Releases](https://github.com/dakera-ai/dakera-cli/releases) page.
+
+## Getting Started
+
+Run the onboarding wizard to connect `dk` to your Dakera server:
+
+```bash
+dk init
+```
+
+This configures your server URL and API key, verifies the connection, and sets up your default namespace.
 
 ## Usage
 
