@@ -218,6 +218,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 memory_type,
                 threshold,
                 dry_run,
+                ..Default::default()
             };
 
             let response = client.consolidate(agent_id, request).await?;

@@ -97,6 +97,84 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             output::info("To remove all vectors from a namespace, use 'dk vector delete --all'");
         }
 
+        Some(("policy", sub_matches)) => {
+            match sub_matches.subcommand() {
+                Some(("get", get_matches)) => {
+                    let ns = get_matches.get_one::<String>("namespace").unwrap();
+                    let policy = client.get_memory_policy(ns).await?;
+                    output::print_item(&policy, format);
+                }
+
+                Some(("set", set_matches)) => {
+                    let ns = set_matches.get_one::<String>("namespace").unwrap();
+
+                    // Fetch the current policy so we only change what the user specified.
+                    let mut policy = client.get_memory_policy(ns).await?;
+
+                    if let Some(v) = set_matches.get_one::<u64>("working-ttl") {
+                        policy.working_ttl_seconds = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u64>("episodic-ttl") {
+                        policy.episodic_ttl_seconds = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u64>("semantic-ttl") {
+                        policy.semantic_ttl_seconds = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u64>("procedural-ttl") {
+                        policy.procedural_ttl_seconds = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<String>("working-decay") {
+                        policy.working_decay = Some(v.clone());
+                    }
+                    if let Some(v) = set_matches.get_one::<String>("episodic-decay") {
+                        policy.episodic_decay = Some(v.clone());
+                    }
+                    if let Some(v) = set_matches.get_one::<String>("semantic-decay") {
+                        policy.semantic_decay = Some(v.clone());
+                    }
+                    if let Some(v) = set_matches.get_one::<String>("procedural-decay") {
+                        policy.procedural_decay = Some(v.clone());
+                    }
+                    if let Some(v) = set_matches.get_one::<f64>("spaced-repetition-factor") {
+                        policy.spaced_repetition_factor = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u64>("spaced-repetition-base-interval") {
+                        policy.spaced_repetition_base_interval_seconds = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<bool>("consolidation-enabled") {
+                        policy.consolidation_enabled = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<f32>("consolidation-threshold") {
+                        policy.consolidation_threshold = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u32>("consolidation-interval-hours") {
+                        policy.consolidation_interval_hours = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<bool>("rate-limit-enabled") {
+                        policy.rate_limit_enabled = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u32>("rate-limit-stores-per-minute") {
+                        policy.rate_limit_stores_per_minute = Some(*v);
+                    }
+                    if let Some(v) = set_matches.get_one::<u32>("rate-limit-recalls-per-minute") {
+                        policy.rate_limit_recalls_per_minute = Some(*v);
+                    }
+
+                    // consolidated_count is read-only — clear it before sending
+                    policy.consolidated_count = None;
+
+                    let updated = client.set_memory_policy(ns, policy).await?;
+                    output::success(&format!("Memory policy updated for namespace '{}'", ns));
+                    output::print_item(&updated, format);
+                }
+
+                _ => {
+                    output::error("Unknown policy subcommand. Use 'get' or 'set'.");
+                    std::process::exit(1);
+                }
+            }
+        }
+
         _ => {
             output::error("Unknown namespace subcommand. Use --help for usage.");
             std::process::exit(1);
