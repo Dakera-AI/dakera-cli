@@ -52,6 +52,20 @@ dk namespace get my-namespace
 dk namespace create my-namespace --dimension 384
 ```
 
+### Namespace Policy
+
+View and update the memory lifecycle policy for a namespace (TTLs, decay, consolidation, rate limits):
+
+```bash
+# View full policy for a namespace
+dk namespace policy get my-namespace
+
+# Update policy settings (partial update — only flags you pass are changed)
+dk namespace policy set my-namespace --decay-enabled true --decay-interval-hours 24
+dk namespace policy set my-namespace --consolidation-enabled true --consolidation-interval-hours 6
+dk namespace policy set my-namespace --rate-limit-store 100 --rate-limit-recall 200
+```
+
 ### Vector Operations
 
 ```bash
