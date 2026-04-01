@@ -180,7 +180,7 @@ fn build_namespace_command() -> Command {
     Command::new("namespace")
         .about("Manage namespaces")
         .after_help(
-            "Examples:\n  dk namespace list\n  dk namespace get my-ns\n  dk namespace create my-ns\n  dk namespace delete my-ns --dry-run\n  dk namespace delete my-ns --yes",
+            "Examples:\n  dk namespace list\n  dk namespace get my-ns\n  dk namespace create my-ns\n  dk namespace delete my-ns --dry-run\n  dk namespace delete my-ns --yes\n  dk namespace policy get my-ns\n  dk namespace policy set my-ns --consolidation-enabled true --rate-limit-enabled true --rate-limit-stores-per-minute 100",
         )
         .subcommand(Command::new("list").about("List all namespaces"))
         .subcommand(
@@ -217,6 +217,37 @@ fn build_namespace_command() -> Command {
                         .long("dry-run")
                         .action(ArgAction::SetTrue)
                         .help("Show what would be deleted without making any changes"),
+                ),
+        )
+        .subcommand(
+            Command::new("policy")
+                .about("Manage namespace memory lifecycle policy (TTLs, consolidation, rate limiting)")
+                .after_help("Examples:\n  dk namespace policy get my-ns\n  dk namespace policy set my-ns --consolidation-enabled true\n  dk namespace policy set my-ns --rate-limit-enabled true --rate-limit-stores-per-minute 60")
+                .subcommand(
+                    Command::new("get")
+                        .about("Show the current memory policy for a namespace")
+                        .arg(Arg::new("namespace").required(true).help("Namespace name")),
+                )
+                .subcommand(
+                    Command::new("set")
+                        .about("Update memory policy fields for a namespace (only supplied flags are changed)")
+                        .arg(Arg::new("namespace").required(true).help("Namespace name"))
+                        .arg(Arg::new("working-ttl").long("working-ttl").value_parser(value_parser!(u64)).help("TTL for working memories in seconds (default: 14400 = 4h)"))
+                        .arg(Arg::new("episodic-ttl").long("episodic-ttl").value_parser(value_parser!(u64)).help("TTL for episodic memories in seconds (default: 2592000 = 30d)"))
+                        .arg(Arg::new("semantic-ttl").long("semantic-ttl").value_parser(value_parser!(u64)).help("TTL for semantic memories in seconds (default: 31536000 = 365d)"))
+                        .arg(Arg::new("procedural-ttl").long("procedural-ttl").value_parser(value_parser!(u64)).help("TTL for procedural memories in seconds (default: 63072000 = 730d)"))
+                        .arg(Arg::new("working-decay").long("working-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for working memories"))
+                        .arg(Arg::new("episodic-decay").long("episodic-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for episodic memories"))
+                        .arg(Arg::new("semantic-decay").long("semantic-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for semantic memories"))
+                        .arg(Arg::new("procedural-decay").long("procedural-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for procedural memories"))
+                        .arg(Arg::new("spaced-repetition-factor").long("spaced-repetition-factor").value_parser(value_parser!(f64)).help("TTL extension multiplier per recall hit (default: 1.0; 0.0 = disabled)"))
+                        .arg(Arg::new("spaced-repetition-base-interval").long("spaced-repetition-base-interval").value_parser(value_parser!(u64)).help("Base interval in seconds for spaced repetition TTL extension (default: 86400 = 1d)"))
+                        .arg(Arg::new("consolidation-enabled").long("consolidation-enabled").value_parser(value_parser!(bool)).help("Enable background DBSCAN deduplication (default: false)"))
+                        .arg(Arg::new("consolidation-threshold").long("consolidation-threshold").value_parser(value_parser!(f32)).help("DBSCAN cosine-similarity threshold (default: 0.92; higher = stricter)"))
+                        .arg(Arg::new("consolidation-interval-hours").long("consolidation-interval-hours").value_parser(value_parser!(u32)).help("Background consolidation sweep interval in hours (default: 24)"))
+                        .arg(Arg::new("rate-limit-enabled").long("rate-limit-enabled").value_parser(value_parser!(bool)).help("Enable per-namespace store/recall rate limiting (default: false)"))
+                        .arg(Arg::new("rate-limit-stores-per-minute").long("rate-limit-stores-per-minute").value_parser(value_parser!(u32)).help("Max store operations per minute (omit for unlimited)"))
+                        .arg(Arg::new("rate-limit-recalls-per-minute").long("rate-limit-recalls-per-minute").value_parser(value_parser!(u32)).help("Max recall operations per minute (omit for unlimited)")),
                 ),
         )
 }

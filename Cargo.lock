@@ -118,7 +118,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "dakera-cli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -136,9 +136,9 @@ dependencies = [
 
 [[package]]
 name = "dakera-client"
-version = "0.8.6"
+version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7643c92d53f1e7c18d97b80008a408d46a468dc7052c9fe4a38a9963f2dbb524"
+checksum = "af6f173af7cb6266c7e48d7e377ca4acf13d0e57d5ad085c186927661f5ce747"
 dependencies = [
  "futures-util",
  "reqwest",

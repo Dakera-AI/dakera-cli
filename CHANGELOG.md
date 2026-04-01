@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-04-01
+
+### Added
+
+- `dk namespace policy get <namespace>` — display the full memory lifecycle policy for a
+  namespace: differential TTLs, decay curves, spaced repetition settings, COG-3 background
+  consolidation config, and SEC-5 per-namespace rate limits.
+- `dk namespace policy set <namespace> [flags]` — patch any subset of policy fields without
+  touching the rest. Fetches the current policy first, applies only the flags supplied, clears the
+  read-only `consolidated_count` field, then PUTs the result. All fields from COG-1, COG-3, and
+  SEC-5 are exposed as flags (see `--help` for the full list).
+- Bumps `dakera-client 0.8 → 0.9` to access `get_memory_policy`, `set_memory_policy`, and the
+  updated `MemoryPolicy` struct with SEC-5 rate-limiting fields (CLI-2).
+
+## [0.5.1] - 2026-03-30
+
+### CI
+
+- Handle already-published crate error for `cargo publish` idempotency (#19)
+- Rename release artifacts with platform names before upload
+- Switch macOS release builds to `macos-latest` native runners (fixes cross-compilation issues) (#18)
+
 ## [0.5.0] - 2026-03-30
 
 ### Added
