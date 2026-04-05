@@ -39,3 +39,9 @@ nu-ansi-term = "0.50"
 # Config file support
 toml = "0.8"
 dirs = "5.0"
+
+[dev-dependencies]
+# Integration test harness: mock HTTP server + CLI subprocess runner
+httpmock = "0.7"
+assert_cmd = "2.0"
+predicates = "3.1"
