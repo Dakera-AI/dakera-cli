@@ -32,8 +32,7 @@ fn health_reports_healthy() {
             .json_body(json!({ "healthy": true, "version": "0.5.2" }));
     });
 
-    dk()
-        .args(["--url", &server.base_url(), "health"])
+    dk().args(["--url", &server.base_url(), "health"])
         .assert()
         .success()
         .stdout(predicate::str::contains("healthy"));
@@ -42,8 +41,7 @@ fn health_reports_healthy() {
 #[test]
 fn health_unreachable_server_exits_with_failure() {
     // Port 1 is privileged — connections are refused without a server running there.
-    dk()
-        .args(["--url", "http://127.0.0.1:1", "health"])
+    dk().args(["--url", "http://127.0.0.1:1", "health"])
         .assert()
         .failure();
 }
@@ -62,8 +60,7 @@ fn namespace_list_empty_shows_no_namespaces_message() {
             .json_body(json!({ "namespaces": [] }));
     });
 
-    dk()
-        .args(["--url", &server.base_url(), "namespace", "list"])
+    dk().args(["--url", &server.base_url(), "namespace", "list"])
         .assert()
         .success()
         .stdout(predicate::str::contains("No namespaces found"));
@@ -119,21 +116,20 @@ fn namespace_policy_get_prints_rate_limit_fields() {
             }));
     });
 
-    dk()
-        .args([
-            "--url",
-            &server.base_url(),
-            "--format",
-            "json",
-            "namespace",
-            "policy",
-            "get",
-            "sdk-lead",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("rate_limit_enabled"))
-        .stdout(predicate::str::contains("true"));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "--format",
+        "json",
+        "namespace",
+        "policy",
+        "get",
+        "sdk-lead",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("rate_limit_enabled"))
+    .stdout(predicate::str::contains("true"));
 }
 
 // ---------------------------------------------------------------------------
@@ -148,8 +144,7 @@ fn namespace_policy_set_rate_limit_reports_success() {
 
     // The command GETs the current policy first so it can do a partial update.
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/v1/namespaces/myns/memory_policy");
+        when.method(GET).path("/v1/namespaces/myns/memory_policy");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "working_ttl_seconds": 14400, "rate_limit_enabled": false }));
@@ -157,8 +152,7 @@ fn namespace_policy_set_rate_limit_reports_success() {
 
     // Then PUTs the merged policy.
     server.mock(|when, then| {
-        when.method(PUT)
-            .path("/v1/namespaces/myns/memory_policy");
+        when.method(PUT).path("/v1/namespaces/myns/memory_policy");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -168,24 +162,23 @@ fn namespace_policy_set_rate_limit_reports_success() {
             }));
     });
 
-    dk()
-        .args([
-            "--url",
-            &server.base_url(),
-            "namespace",
-            "policy",
-            "set",
-            "myns",
-            "--rate-limit-enabled",
-            "true",
-            "--rate-limit-stores-per-minute",
-            "30",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(
-            "Memory policy updated for namespace 'myns'",
-        ));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "namespace",
+        "policy",
+        "set",
+        "myns",
+        "--rate-limit-enabled",
+        "true",
+        "--rate-limit-stores-per-minute",
+        "30",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Memory policy updated for namespace 'myns'",
+    ));
 }
 
 /// Verifies that disabling rate limiting via `--rate-limit-enabled false` also
@@ -195,34 +188,31 @@ fn namespace_policy_set_rate_limit_disabled_succeeds() {
     let server = MockServer::start();
 
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/v1/namespaces/myns/memory_policy");
+        when.method(GET).path("/v1/namespaces/myns/memory_policy");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "rate_limit_enabled": true }));
     });
     server.mock(|when, then| {
-        when.method(PUT)
-            .path("/v1/namespaces/myns/memory_policy");
+        when.method(PUT).path("/v1/namespaces/myns/memory_policy");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "rate_limit_enabled": false }));
     });
 
-    dk()
-        .args([
-            "--url",
-            &server.base_url(),
-            "namespace",
-            "policy",
-            "set",
-            "myns",
-            "--rate-limit-enabled",
-            "false",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(
-            "Memory policy updated for namespace 'myns'",
-        ));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "namespace",
+        "policy",
+        "set",
+        "myns",
+        "--rate-limit-enabled",
+        "false",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Memory policy updated for namespace 'myns'",
+    ));
 }
