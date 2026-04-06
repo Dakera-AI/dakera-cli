@@ -25,6 +25,25 @@ env:
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
+  audit:
+    name: Security Audit
+    runs-on: [self-hosted, linux, arm64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure SSH for private repos
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: audit
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Run cargo audit
+        run: cargo audit
+
   check:
     name: Check
     runs-on: [self-hosted, linux, arm64]
