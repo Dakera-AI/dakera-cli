@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-04-13
+
+### Added
+
+- Integration test harness: 7 tests covering health, namespace list, and namespace policy
+  get/set using `httpmock` + `assert_cmd` (DAK-1492).
+
+### CI
+
+- Add `cargo-audit` CVE scanning to CI pipeline — runs on every push and PR (#26).
+- Skip `cargo-audit` installation when binary already exists on self-hosted runner (#27).
+
+### Changed
+
+- Updated README to reflect open-core product model and current platform positioning (#28).
+
 ## [0.5.2] - 2026-04-01
 
 ### Added
