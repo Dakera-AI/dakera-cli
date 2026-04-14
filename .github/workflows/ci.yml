@@ -22,7 +22,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
   audit:
@@ -31,10 +30,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - name: Configure SSH for private repos
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -49,10 +44,6 @@ jobs:
     runs-on: [self-hosted, linux, arm64]
     steps:
       - uses: actions/checkout@v6
-      - name: Configure SSH for private repos
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -64,10 +55,6 @@ jobs:
     runs-on: [self-hosted, linux, arm64]
     steps:
       - uses: actions/checkout@v6
-      - name: Configure SSH for private repos
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -91,10 +78,6 @@ jobs:
     runs-on: [self-hosted, linux, arm64]
     steps:
       - uses: actions/checkout@v6
-      - name: Configure SSH for private repos
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387  # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
