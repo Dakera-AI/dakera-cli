@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-04-17
+
+### CI
+
+- Remove obsolete SSH agent setup from all CI jobs.
+  ([#30](https://github.com/Dakera-AI/dakera-cli/pull/30))
+
+### Dependencies
+
+- Bumped `rand` from 0.9.2 to 0.9.4.
+  ([#29](https://github.com/Dakera-AI/dakera-cli/pull/29))
+- **Security — rustls-webpki CVE patch**: Updated to `rustls-webpki 0.103.12` addressing
+  GHSA-xgp8-3hg3-c2mh and GHSA-965h-392x-2mh5 (CVSS 2.2 LOW).
+  ([#32](https://github.com/Dakera-AI/dakera-cli/pull/32))
+
 ## [0.5.3] - 2026-04-13
 
 ### Added
