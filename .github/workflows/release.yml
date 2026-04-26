@@ -74,7 +74,7 @@ jobs:
           mv dk-aarch64-apple-darwin/dk dk-aarch64-apple-darwin/dk-aarch64-apple-darwin
           mv dk-x86_64-apple-darwin/dk dk-x86_64-apple-darwin/dk-x86_64-apple-darwin
       - name: Upload binaries to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dk-x86_64-unknown-linux-gnu/dk-x86_64-unknown-linux-gnu
