@@ -43,5 +43,5 @@ dirs = "5.0"
 [dev-dependencies]
 # Integration test harness: mock HTTP server + CLI subprocess runner
 httpmock = "0.7"
-assert_cmd = "2.0"
+assert_cmd = "2.2"
 predicates = "3.1"
