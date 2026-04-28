@@ -56,7 +56,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
 
             let session = client.end_session(session_id, summary).await?;
 
-            output::success(&format!("Session '{}' ended", session.id));
+            output::success(&format!("Session '{}' ended", session.session.id));
             output::print_item(&session, format);
         }
 
