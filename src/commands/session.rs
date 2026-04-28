@@ -54,10 +54,10 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
             let summary = sub_matches.get_one::<String>("summary").cloned();
 
-            let session = client.end_session(session_id, summary).await?;
+            let response = client.end_session(session_id, summary).await?;
 
-            output::success(&format!("Session '{}' ended", session.id));
-            output::print_item(&session, format);
+            output::success(&format!("Session '{}' ended", response.session.id));
+            output::print_item(&response, format);
         }
 
         Some(("get", sub_matches)) => {
