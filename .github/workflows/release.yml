@@ -32,7 +32,7 @@ jobs:
       - name: Install cargo-zigbuild
         if: matrix.use_zigbuild == true
         run: |
-          pip install ziglang
+          python3 -m pip install --break-system-packages ziglang
           cargo install cargo-zigbuild
       - name: Build (zigbuild)
         if: matrix.use_zigbuild == true
