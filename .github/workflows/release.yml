@@ -20,6 +20,7 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-14
             artifact: dk
+            use_zigbuild: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             artifact: dk.exe
