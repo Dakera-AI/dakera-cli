@@ -8,7 +8,7 @@ repository = "https://github.com/dakera-ai/dakera-cli"
 homepage = "https://dakera.ai"
 documentation = "https://docs.rs/dakera-cli"
 keywords = ["agent-memory", "vector-search", "knowledge-graph", "ai-agents", "mcp"]
-categories = ["database", "command-line-utilities"]
+categories = ["database", "science", "command-line-utilities"]
 
 [[bin]]
 name = "dk"
