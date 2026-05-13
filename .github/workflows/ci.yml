@@ -28,16 +28,14 @@ jobs:
     name: Security Audit
     runs-on: [self-hosted, linux, arm64]
     timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: rustsec/audit-check@v2
         with:
-          shared-key: audit
-      - name: Install cargo-audit
-        run: which cargo-audit >/dev/null 2>&1 || cargo install cargo-audit --locked
-      - name: Run cargo audit
-        run: cargo audit
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   check:
     name: Check
