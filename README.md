@@ -4,7 +4,7 @@ Command-line interface for Dakera AI — inspect and manage a Dakera instance fr
 
 Part of [Dakera AI](https://dakera.ai) — the memory engine for AI agents.
 
-> The Dakera memory engine scores **87.8% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
+> The Dakera memory engine scores **87.6% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
 
 ---
 
