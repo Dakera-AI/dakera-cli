@@ -1,5 +1,7 @@
 # ⚡ dakera-cli
 
+[![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE)
+
 Command-line interface for Dakera AI — inspect and manage a Dakera instance from the terminal.
 
 Part of [Dakera AI](https://dakera.ai) — the memory engine for AI agents.
