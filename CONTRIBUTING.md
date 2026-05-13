@@ -58,12 +58,16 @@ cargo check
 
 ## Reporting Issues
 
-Please use [GitHub Issues](https://github.com/dakera-ai/dakera-cli/issues) to report bugs or request features. Include:
-
+Use the [Bug Report](https://github.com/Dakera-AI/dakera-cli/issues/new?template=bug_report.md) template to report bugs. Please include:
 - Steps to reproduce the issue
 - Expected vs actual behavior
-- `dk --version` output
-- Operating system and Rust version
+- `dk --version` output, operating system, and Rust version
+
+Have a feature idea? Use the [Feature Request](https://github.com/Dakera-AI/dakera-cli/issues/new?template=feature_request.md) template.
+
+## Security Vulnerabilities
+
+**Do not open public issues for security vulnerabilities.** See [SECURITY.md](.github/SECURITY.md) for responsible disclosure instructions — email security@dakera.ai.
 
 ## License
 
