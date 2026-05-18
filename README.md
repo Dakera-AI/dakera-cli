@@ -85,7 +85,7 @@ export DAKERA_API_KEY=your-key
 |---|---|
 | [dakera-py](https://github.com/dakera-ai/dakera-py) | Python SDK |
 | [dakera-js](https://github.com/dakera-ai/dakera-js) | TypeScript SDK |
-| [dakera-mcp](https://github.com/dakera-ai/dakera-mcp) | MCP server · 83 tools |
+| [dakera-mcp](https://github.com/dakera-ai/dakera-mcp) | MCP server · 14 core tools (86+ via profiles) |
 | [dakera-deploy](https://github.com/dakera-ai/dakera-deploy) | Self-host Dakera |
 
 ---
