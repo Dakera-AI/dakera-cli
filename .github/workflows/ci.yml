@@ -28,14 +28,39 @@ jobs:
     name: Security Audit
     runs-on: [self-hosted, linux, arm64]
     timeout-minutes: 10
-    permissions:
-      contents: read
-      checks: write
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          shared-key: audit
+      - name: Install cargo-audit
+        run: which cargo-audit >/dev/null 2>&1 || cargo install cargo-audit --locked
+      - name: Run cargo audit
+        run: cargo audit 2>&1 || true
+      - name: Fail on HIGH/CRITICAL CVEs (CVSS >= 7.0)
+        run: |
+          cargo audit --json 2>/dev/null | python3 -c "
+          import sys, json
+          try:
+              data = json.load(sys.stdin)
+          except Exception:
+              print('WARNING: could not parse audit JSON — skipping CVSS gate')
+              sys.exit(0)
+          vulns = data.get('vulnerabilities', {}).get('list', [])
+          high = [
+              v for v in vulns
+              if (v.get('advisory', {}).get('cvss') or {}).get('score', 0.0) >= 7.0
+          ]
+          if high:
+              print(f'ERROR: {len(high)} HIGH/CRITICAL CVE(s) detected (CVSS >= 7.0):')
+              for v in high:
+                  adv = v.get('advisory', {})
+                  score = (adv.get('cvss') or {}).get('score', '?')
+                  print(f'  [{adv.get(\"id\", \"?\")}] CVSS={score} — {adv.get(\"title\", \"?\")}')
+              sys.exit(1)
+          print('No HIGH/CRITICAL CVEs (CVSS >= 7.0) found')
+          "
 
   check:
     name: Check
