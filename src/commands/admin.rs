@@ -329,13 +329,7 @@ mod tests {
     #[test]
     fn admin_configure_ttl_requires_ttl_seconds() {
         let m = build_admin_command()
-            .try_get_matches_from([
-                "admin",
-                "configure-ttl",
-                "my-ns",
-                "--ttl-seconds",
-                "86400",
-            ])
+            .try_get_matches_from(["admin", "configure-ttl", "my-ns", "--ttl-seconds", "86400"])
             .expect("admin configure-ttl should parse");
         let sub = m.subcommand_matches("configure-ttl").unwrap();
         assert_eq!(*sub.get_one::<u64>("ttl-seconds").unwrap(), 86400u64);

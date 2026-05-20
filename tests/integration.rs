@@ -480,7 +480,8 @@ fn memory_search_empty_shows_no_memories() {
 fn memory_update_success_reports_memory_id() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(PUT).path("/v1/agents/test-agent/memories/mem-001");
+        when.method(PUT)
+            .path("/v1/agents/test-agent/memories/mem-001");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "memory_id": "mem-001" }));
@@ -540,7 +541,8 @@ fn memory_consolidate_dry_run_shows_preview() {
 fn memory_feedback_submits_and_reports_status() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/agents/test-agent/memories/feedback");
+        when.method(POST)
+            .path("/v1/agents/test-agent/memories/feedback");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "status": "accepted", "updated_importance": 0.75 }));
@@ -633,17 +635,11 @@ fn agent_stats_shows_statistics_table() {
             }));
     });
 
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "agent",
-        "stats",
-        "core-engine",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("core-engine"))
-    .stdout(predicate::str::contains("42"));
+    dk().args(["--url", &server.base_url(), "agent", "stats", "core-engine"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("core-engine"))
+        .stdout(predicate::str::contains("42"));
 }
 
 // ---------------------------------------------------------------------------
@@ -782,17 +778,11 @@ fn session_end_prints_confirmation() {
             }));
     });
 
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "session",
-        "end",
-        "sess-abc123",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("sess-abc123"))
-    .stdout(predicate::str::contains("ended"));
+    dk().args(["--url", &server.base_url(), "session", "end", "sess-abc123"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sess-abc123"))
+        .stdout(predicate::str::contains("ended"));
 }
 
 // ---------------------------------------------------------------------------
@@ -906,7 +896,8 @@ fn vector_upsert_one_success() {
 fn vector_delete_by_ids_success() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/namespaces/test-ns/vectors/delete");
+        when.method(POST)
+            .path("/v1/namespaces/test-ns/vectors/delete");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "deleted_count": 2 }));
@@ -1098,17 +1089,11 @@ fn keys_create_shows_new_key_value() {
             }));
     });
 
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "keys",
-        "create",
-        "test-key",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("test-key"))
-    .stdout(predicate::str::contains("dk_secret_test_key_value"));
+    dk().args(["--url", &server.base_url(), "keys", "create", "test-key"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("test-key"))
+        .stdout(predicate::str::contains("dk_secret_test_key_value"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1125,16 +1110,10 @@ fn keys_delete_success_reports_deletion() {
             .json_body(json!({}));
     });
 
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "keys",
-        "delete",
-        "key-abc",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("deleted"));
+    dk().args(["--url", &server.base_url(), "keys", "delete", "key-abc"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
 }
 
 // ---------------------------------------------------------------------------

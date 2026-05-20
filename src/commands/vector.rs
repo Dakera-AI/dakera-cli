@@ -417,7 +417,13 @@ mod tests {
     fn vector_delete_dry_run_flag_works() {
         let m = build_vector_command()
             .try_get_matches_from([
-                "vector", "delete", "--namespace", "ns1", "--ids", "v1", "--dry-run",
+                "vector",
+                "delete",
+                "--namespace",
+                "ns1",
+                "--ids",
+                "v1",
+                "--dry-run",
             ])
             .expect("vector delete with --dry-run should parse");
         let sub = m.subcommand_matches("delete").unwrap();
@@ -428,7 +434,12 @@ mod tests {
     fn vector_query_top_k_defaults_to_10() {
         let m = build_vector_command()
             .try_get_matches_from([
-                "vector", "query", "--namespace", "ns1", "--values", "0.1,0.2",
+                "vector",
+                "query",
+                "--namespace",
+                "ns1",
+                "--values",
+                "0.1,0.2",
             ])
             .expect("vector query should parse");
         let sub = m.subcommand_matches("query").unwrap();

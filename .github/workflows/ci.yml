@@ -114,11 +114,11 @@ jobs:
       dakera:
         image: ghcr.io/dakera-ai/dakera:latest
         ports:
-          - 13300:3300
+          - 13300:3000
         env:
           DAKERA_API_KEY: test-integration-key
         options: >-
-          --health-cmd "curl -sf http://localhost:3300/health || exit 1"
+          --health-cmd "curl -sf http://localhost:3000/health || exit 1"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10

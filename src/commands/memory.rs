@@ -326,13 +326,22 @@ mod tests {
     fn parse_memory_type_defaults_to_episodic_for_unknown() {
         assert!(matches!(parse_memory_type("unknown"), MemoryType::Episodic));
         assert!(matches!(parse_memory_type(""), MemoryType::Episodic));
-        assert!(matches!(parse_memory_type("EPISODIC"), MemoryType::Episodic));
+        assert!(matches!(
+            parse_memory_type("EPISODIC"),
+            MemoryType::Episodic
+        ));
     }
 
     #[test]
     fn parse_memory_type_recognizes_all_variants() {
-        assert!(matches!(parse_memory_type("episodic"), MemoryType::Episodic));
-        assert!(matches!(parse_memory_type("semantic"), MemoryType::Semantic));
+        assert!(matches!(
+            parse_memory_type("episodic"),
+            MemoryType::Episodic
+        ));
+        assert!(matches!(
+            parse_memory_type("semantic"),
+            MemoryType::Semantic
+        ));
         assert!(matches!(
             parse_memory_type("procedural"),
             MemoryType::Procedural
@@ -342,7 +351,10 @@ mod tests {
 
     #[test]
     fn parse_memory_type_is_case_insensitive() {
-        assert!(matches!(parse_memory_type("SEMANTIC"), MemoryType::Semantic));
+        assert!(matches!(
+            parse_memory_type("SEMANTIC"),
+            MemoryType::Semantic
+        ));
         assert!(matches!(
             parse_memory_type("Procedural"),
             MemoryType::Procedural
