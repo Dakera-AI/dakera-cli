@@ -317,3 +317,55 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_memory_type_defaults_to_episodic_for_unknown() {
+        assert!(matches!(parse_memory_type("unknown"), MemoryType::Episodic));
+        assert!(matches!(parse_memory_type(""), MemoryType::Episodic));
+        assert!(matches!(parse_memory_type("EPISODIC"), MemoryType::Episodic));
+    }
+
+    #[test]
+    fn parse_memory_type_recognizes_all_variants() {
+        assert!(matches!(parse_memory_type("episodic"), MemoryType::Episodic));
+        assert!(matches!(parse_memory_type("semantic"), MemoryType::Semantic));
+        assert!(matches!(
+            parse_memory_type("procedural"),
+            MemoryType::Procedural
+        ));
+        assert!(matches!(parse_memory_type("working"), MemoryType::Working));
+    }
+
+    #[test]
+    fn parse_memory_type_is_case_insensitive() {
+        assert!(matches!(parse_memory_type("SEMANTIC"), MemoryType::Semantic));
+        assert!(matches!(
+            parse_memory_type("Procedural"),
+            MemoryType::Procedural
+        ));
+        assert!(matches!(parse_memory_type("WORKING"), MemoryType::Working));
+    }
+
+    #[test]
+    fn memory_type_to_string_returns_lowercase() {
+        assert_eq!(memory_type_to_string(&MemoryType::Episodic), "episodic");
+        assert_eq!(memory_type_to_string(&MemoryType::Semantic), "semantic");
+        assert_eq!(memory_type_to_string(&MemoryType::Procedural), "procedural");
+        assert_eq!(memory_type_to_string(&MemoryType::Working), "working");
+    }
+
+    #[test]
+    fn parse_and_stringify_are_inverses() {
+        for s in &["episodic", "semantic", "procedural", "working"] {
+            assert_eq!(
+                &memory_type_to_string(&parse_memory_type(s)),
+                s,
+                "round-trip failed for: {s}"
+            );
+        }
+    }
+}

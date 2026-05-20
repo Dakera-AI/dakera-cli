@@ -182,3 +182,46 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_keys_command;
+
+    #[test]
+    fn keys_create_requires_name() {
+        assert!(
+            build_keys_command()
+                .try_get_matches_from(["keys", "create"])
+                .is_err(),
+            "keys create without name should fail"
+        );
+    }
+
+    #[test]
+    fn keys_create_with_permissions_flag() {
+        let m = build_keys_command()
+            .try_get_matches_from(["keys", "create", "my-key", "--permissions", "write"])
+            .expect("keys create with --permissions should parse");
+        let sub = m.subcommand_matches("create").unwrap();
+        assert_eq!(sub.get_one::<String>("permissions").unwrap(), "write");
+    }
+
+    #[test]
+    fn keys_delete_requires_key_id() {
+        assert!(
+            build_keys_command()
+                .try_get_matches_from(["keys", "delete"])
+                .is_err(),
+            "keys delete without key_id should fail"
+        );
+    }
+
+    #[test]
+    fn keys_create_with_expiry_in_days() {
+        let m = build_keys_command()
+            .try_get_matches_from(["keys", "create", "expiring-key", "--expires", "30"])
+            .expect("keys create with --expires should parse");
+        let sub = m.subcommand_matches("create").unwrap();
+        assert_eq!(*sub.get_one::<u64>("expires").unwrap(), 30u64);
+    }
+}

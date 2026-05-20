@@ -290,3 +290,51 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_knowledge_command;
+
+    #[test]
+    fn knowledge_graph_requires_agent_id() {
+        assert!(
+            build_knowledge_command()
+                .try_get_matches_from(["knowledge", "graph"])
+                .is_err(),
+            "knowledge graph without agent_id should fail"
+        );
+    }
+
+    #[test]
+    fn knowledge_graph_with_depth_flag() {
+        let m = build_knowledge_command()
+            .try_get_matches_from(["knowledge", "graph", "test-agent", "--depth", "3"])
+            .expect("knowledge graph with --depth should parse");
+        let sub = m.subcommand_matches("graph").unwrap();
+        assert_eq!(*sub.get_one::<u32>("depth").unwrap(), 3u32);
+    }
+
+    #[test]
+    fn knowledge_deduplicate_dry_run_flag_works() {
+        let m = build_knowledge_command()
+            .try_get_matches_from(["knowledge", "deduplicate", "test-agent", "--dry-run"])
+            .expect("knowledge deduplicate --dry-run should parse");
+        let sub = m.subcommand_matches("deduplicate").unwrap();
+        assert!(sub.get_flag("dry-run"));
+    }
+
+    #[test]
+    fn knowledge_summarize_accepts_memory_ids() {
+        let m = build_knowledge_command()
+            .try_get_matches_from([
+                "knowledge",
+                "summarize",
+                "test-agent",
+                "--memory-ids",
+                "m1,m2,m3",
+            ])
+            .expect("knowledge summarize with --memory-ids should parse");
+        let sub = m.subcommand_matches("summarize").unwrap();
+        assert_eq!(sub.get_one::<String>("memory-ids").unwrap(), "m1,m2,m3");
+    }
+}

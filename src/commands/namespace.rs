@@ -212,3 +212,57 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_namespace_command;
+
+    #[test]
+    fn namespace_list_subcommand_recognized() {
+        build_namespace_command()
+            .try_get_matches_from(["namespace", "list"])
+            .expect("namespace list should parse");
+    }
+
+    #[test]
+    fn namespace_delete_requires_name() {
+        assert!(
+            build_namespace_command()
+                .try_get_matches_from(["namespace", "delete"])
+                .is_err(),
+            "namespace delete without name should fail"
+        );
+    }
+
+    #[test]
+    fn namespace_delete_dry_run_flag_works() {
+        let m = build_namespace_command()
+            .try_get_matches_from(["namespace", "delete", "my-ns", "--dry-run"])
+            .expect("namespace delete --dry-run should parse");
+        let sub = m.subcommand_matches("delete").unwrap();
+        assert!(sub.get_flag("dry-run"));
+    }
+
+    #[test]
+    fn namespace_policy_set_rate_limit_flag_parsed() {
+        let m = build_namespace_command()
+            .try_get_matches_from([
+                "namespace",
+                "policy",
+                "set",
+                "my-ns",
+                "--rate-limit-enabled",
+                "true",
+                "--rate-limit-stores-per-minute",
+                "60",
+            ])
+            .expect("namespace policy set should parse");
+        let policy = m.subcommand_matches("policy").unwrap();
+        let set = policy.subcommand_matches("set").unwrap();
+        assert!(*set.get_one::<bool>("rate-limit-enabled").unwrap());
+        assert_eq!(
+            *set.get_one::<u32>("rate-limit-stores-per-minute").unwrap(),
+            60u32
+        );
+    }
+}

@@ -106,3 +106,40 @@ jobs:
         with:
           shared-key: test
       - run: cargo test
+
+  integration-test:
+    name: Integration Test (Container)
+    runs-on: [self-hosted, linux, arm64]
+    services:
+      dakera:
+        image: ghcr.io/dakera-ai/dakera:latest
+        ports:
+          - 3300:3300
+        env:
+          DAKERA_API_KEY: test-integration-key
+        options: >-
+          --health-cmd "curl -sf http://localhost:3300/health || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: integration-test
+      - name: Build dk binary
+        run: cargo build --release
+      - name: Wait for dakera server
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3300/health && break || true
+            echo "Waiting for dakera server... attempt $i/30"
+            sleep 2
+          done
+          curl -sf http://localhost:3300/health || (echo "ERROR: dakera server failed to start" && exit 1)
+      - name: Run container integration tests
+        env:
+          DAKERA_TEST_URL: http://localhost:3300
+          DAKERA_TEST_KEY: test-integration-key
+        run: cargo test --test integration -- --ignored --nocapture

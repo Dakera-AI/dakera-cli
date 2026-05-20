@@ -294,3 +294,50 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_admin_command;
+
+    #[test]
+    fn admin_cluster_status_subcommand_recognized() {
+        build_admin_command()
+            .try_get_matches_from(["admin", "cluster-status"])
+            .expect("admin cluster-status should parse");
+    }
+
+    #[test]
+    fn admin_optimize_requires_namespace() {
+        assert!(
+            build_admin_command()
+                .try_get_matches_from(["admin", "optimize"])
+                .is_err(),
+            "admin optimize without namespace should fail"
+        );
+    }
+
+    #[test]
+    fn admin_backup_restore_requires_backup_id() {
+        assert!(
+            build_admin_command()
+                .try_get_matches_from(["admin", "backup-restore"])
+                .is_err(),
+            "admin backup-restore without id should fail"
+        );
+    }
+
+    #[test]
+    fn admin_configure_ttl_requires_ttl_seconds() {
+        let m = build_admin_command()
+            .try_get_matches_from([
+                "admin",
+                "configure-ttl",
+                "my-ns",
+                "--ttl-seconds",
+                "86400",
+            ])
+            .expect("admin configure-ttl should parse");
+        let sub = m.subcommand_matches("configure-ttl").unwrap();
+        assert_eq!(*sub.get_one::<u64>("ttl-seconds").unwrap(), 86400u64);
+    }
+}

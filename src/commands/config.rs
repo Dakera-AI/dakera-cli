@@ -109,3 +109,53 @@ async fn cmd_profile_list() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_config_command;
+
+    #[test]
+    fn config_no_subcommand_defaults_to_show() {
+        build_config_command()
+            .try_get_matches_from(["config"])
+            .expect("config with no subcommand should parse");
+    }
+
+    #[test]
+    fn config_profile_add_requires_name_and_url() {
+        assert!(
+            build_config_command()
+                .try_get_matches_from(["config", "profile", "add", "my-profile"])
+                .is_err(),
+            "config profile add without --url should fail"
+        );
+    }
+
+    #[test]
+    fn config_profile_add_with_url_succeeds() {
+        let m = build_config_command()
+            .try_get_matches_from([
+                "config",
+                "profile",
+                "add",
+                "staging",
+                "--url",
+                "http://staging.example.com",
+            ])
+            .expect("config profile add with --url should parse");
+        let profile = m.subcommand_matches("profile").unwrap();
+        let add = profile.subcommand_matches("add").unwrap();
+        assert_eq!(add.get_one::<String>("name").unwrap(), "staging");
+        assert_eq!(
+            add.get_one::<String>("url").unwrap(),
+            "http://staging.example.com"
+        );
+    }
+
+    #[test]
+    fn config_profile_list_subcommand_recognized() {
+        build_config_command()
+            .try_get_matches_from(["config", "profile", "list"])
+            .expect("config profile list should parse");
+    }
+}

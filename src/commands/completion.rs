@@ -644,3 +644,40 @@ pub fn execute(shell: &str, install: bool) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_completion_command;
+
+    #[test]
+    fn completion_requires_shell_argument() {
+        assert!(
+            build_completion_command()
+                .try_get_matches_from(["completion"])
+                .is_err(),
+            "completion without shell argument should fail"
+        );
+    }
+
+    #[test]
+    fn completion_bash_is_valid() {
+        build_completion_command()
+            .try_get_matches_from(["completion", "bash"])
+            .expect("completion bash should parse");
+    }
+
+    #[test]
+    fn completion_zsh_is_valid() {
+        build_completion_command()
+            .try_get_matches_from(["completion", "zsh"])
+            .expect("completion zsh should parse");
+    }
+
+    #[test]
+    fn completion_install_flag_works() {
+        let m = build_completion_command()
+            .try_get_matches_from(["completion", "fish", "--install"])
+            .expect("completion fish --install should parse");
+        assert!(m.get_flag("install"));
+    }
+}

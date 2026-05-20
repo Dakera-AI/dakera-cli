@@ -189,3 +189,43 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_agent_command;
+
+    #[test]
+    fn agent_list_subcommand_is_recognized() {
+        build_agent_command()
+            .try_get_matches_from(["agent", "list"])
+            .expect("agent list should parse successfully");
+    }
+
+    #[test]
+    fn agent_stats_requires_agent_id() {
+        assert!(
+            build_agent_command()
+                .try_get_matches_from(["agent", "stats"])
+                .is_err(),
+            "agent stats without agent_id should fail"
+        );
+    }
+
+    #[test]
+    fn agent_memories_limit_defaults_to_50() {
+        let m = build_agent_command()
+            .try_get_matches_from(["agent", "memories", "test-agent"])
+            .expect("agent memories should parse successfully");
+        let sub = m.subcommand_matches("memories").unwrap();
+        assert_eq!(*sub.get_one::<u32>("limit").unwrap(), 50u32);
+    }
+
+    #[test]
+    fn agent_sessions_active_only_flag_works() {
+        let m = build_agent_command()
+            .try_get_matches_from(["agent", "sessions", "test-agent", "--active-only"])
+            .expect("agent sessions with --active-only should parse");
+        let sub = m.subcommand_matches("sessions").unwrap();
+        assert!(sub.get_flag("active-only"));
+    }
+}

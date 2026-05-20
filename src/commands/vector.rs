@@ -398,3 +398,49 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_vector_command;
+
+    #[test]
+    fn vector_upsert_one_requires_namespace_and_id() {
+        assert!(
+            build_vector_command()
+                .try_get_matches_from(["vector", "upsert-one", "--id", "v1"])
+                .is_err(),
+            "upsert-one without --namespace should fail"
+        );
+    }
+
+    #[test]
+    fn vector_delete_dry_run_flag_works() {
+        let m = build_vector_command()
+            .try_get_matches_from([
+                "vector", "delete", "--namespace", "ns1", "--ids", "v1", "--dry-run",
+            ])
+            .expect("vector delete with --dry-run should parse");
+        let sub = m.subcommand_matches("delete").unwrap();
+        assert!(sub.get_flag("dry-run"));
+    }
+
+    #[test]
+    fn vector_query_top_k_defaults_to_10() {
+        let m = build_vector_command()
+            .try_get_matches_from([
+                "vector", "query", "--namespace", "ns1", "--values", "0.1,0.2",
+            ])
+            .expect("vector query should parse");
+        let sub = m.subcommand_matches("query").unwrap();
+        assert_eq!(*sub.get_one::<u32>("top-k").unwrap(), 10u32);
+    }
+
+    #[test]
+    fn vector_export_limit_defaults_to_100() {
+        let m = build_vector_command()
+            .try_get_matches_from(["vector", "export", "--namespace", "ns1"])
+            .expect("vector export should parse");
+        let sub = m.subcommand_matches("export").unwrap();
+        assert_eq!(*sub.get_one::<u32>("limit").unwrap(), 100u32);
+    }
+}
