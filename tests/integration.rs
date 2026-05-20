@@ -228,7 +228,7 @@ fn namespace_policy_set_rate_limit_disabled_succeeds() {
 fn memory_store_returns_success_message() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories");
+        when.method(POST).path("/v1/memory/store");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -255,7 +255,7 @@ fn memory_store_returns_success_message() {
 fn memory_store_with_importance_flag() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories");
+        when.method(POST).path("/v1/memory/store");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "memory_id": "mem-002", "namespace": "test-agent" }));
@@ -280,7 +280,7 @@ fn memory_store_with_importance_flag() {
 fn memory_store_server_error_exits_failure() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories");
+        when.method(POST).path("/v1/memory/store");
         then.status(500)
             .header("Content-Type", "application/json")
             .json_body(json!({ "error": "Internal server error" }));
@@ -306,7 +306,7 @@ fn memory_store_server_error_exits_failure() {
 fn memory_recall_empty_shows_no_memories_message() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/recall");
+        when.method(POST).path("/v1/memory/recall");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "memories": [], "total_found": 0 }));
@@ -329,7 +329,7 @@ fn memory_recall_empty_shows_no_memories_message() {
 fn memory_recall_returns_found_count() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/recall");
+        when.method(POST).path("/v1/memory/recall");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -364,7 +364,7 @@ fn memory_recall_returns_found_count() {
 fn memory_recall_unauthorized_exits_failure() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/recall");
+        when.method(POST).path("/v1/memory/recall");
         then.status(401)
             .header("Content-Type", "application/json")
             .json_body(json!({ "error": "Unauthorized" }));
@@ -389,9 +389,8 @@ fn memory_recall_unauthorized_exits_failure() {
 #[test]
 fn memory_forget_success_reports_deleted_count() {
     let server = MockServer::start();
-    // Match any DELETE under /v1/test-agent/memories (single-ID or batch endpoint)
     server.mock(|when, then| {
-        when.method(DELETE).path_matches(r"^/v1/test-agent/memories");
+        when.method(POST).path("/v1/memory/forget");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "deleted_count": 1 }));
@@ -418,7 +417,7 @@ fn memory_forget_success_reports_deleted_count() {
 fn memory_get_shows_memory_content() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(GET).path("/v1/memories/mem-001");
+        when.method(GET).path("/v1/memory/get/mem-001");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -454,7 +453,7 @@ fn memory_get_shows_memory_content() {
 fn memory_search_empty_shows_no_memories() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/search");
+        when.method(POST).path("/v1/memory/search");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "memories": [], "total_found": 0 }));
@@ -481,7 +480,7 @@ fn memory_search_empty_shows_no_memories() {
 fn memory_update_success_reports_memory_id() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(PUT).path("/v1/test-agent/memories/mem-001");
+        when.method(PUT).path("/v1/agents/test-agent/memories/mem-001");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "memory_id": "mem-001" }));
@@ -510,7 +509,7 @@ fn memory_update_success_reports_memory_id() {
 fn memory_consolidate_dry_run_shows_preview() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/consolidate");
+        when.method(POST).path("/v1/memory/consolidate");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -541,7 +540,7 @@ fn memory_consolidate_dry_run_shows_preview() {
 fn memory_feedback_submits_and_reports_status() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/memories/feedback");
+        when.method(POST).path("/v1/agents/test-agent/memories/feedback");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "status": "accepted", "updated_importance": 0.75 }));
@@ -736,14 +735,15 @@ fn agent_sessions_empty_shows_message() {
 fn session_start_prints_session_id() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/sessions");
+        when.method(POST).path("/v1/sessions/start");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
-                "id": "sess-abc123",
-                "agent_id": "test-agent",
-                "started_at": 1716000000_u64,
-                "ended_at": null
+                "session": {
+                    "id": "sess-abc123",
+                    "agent_id": "test-agent",
+                    "started_at": 1716000000_u64
+                }
             }));
     });
 
@@ -768,7 +768,7 @@ fn session_start_prints_session_id() {
 fn session_end_prints_confirmation() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(PUT).path("/v1/sessions/sess-abc123/end");
+        when.method(POST).path("/v1/sessions/sess-abc123/end");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -875,7 +875,7 @@ fn session_memories_empty_shows_message() {
 fn vector_upsert_one_success() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-ns/vectors/upsert-one");
+        when.method(POST).path("/v1/namespaces/test-ns/vectors");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "upserted_count": 1 }));
@@ -906,7 +906,7 @@ fn vector_upsert_one_success() {
 fn vector_delete_by_ids_success() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(DELETE).path("/v1/test-ns/vectors");
+        when.method(POST).path("/v1/namespaces/test-ns/vectors/delete");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "deleted_count": 2 }));
@@ -955,7 +955,7 @@ fn vector_delete_dry_run_skips_server_call() {
 fn knowledge_graph_empty_shows_zero_nodes() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/knowledge/graph");
+        when.method(POST).path("/v1/knowledge/graph");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -981,7 +981,7 @@ fn knowledge_graph_empty_shows_zero_nodes() {
 fn knowledge_graph_shows_node_and_edge_counts() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/knowledge/graph");
+        when.method(POST).path("/v1/knowledge/graph");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -1026,7 +1026,7 @@ fn knowledge_graph_shows_node_and_edge_counts() {
 fn knowledge_deduplicate_dry_run_reports_found_groups() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/test-agent/knowledge/deduplicate");
+        when.method(POST).path("/v1/knowledge/deduplicate");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({

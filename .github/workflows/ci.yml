@@ -114,7 +114,7 @@ jobs:
       dakera:
         image: ghcr.io/dakera-ai/dakera:latest
         ports:
-          - 3300:3300
+          - 13300:3300
         env:
           DAKERA_API_KEY: test-integration-key
         options: >-
@@ -133,13 +133,13 @@ jobs:
       - name: Wait for dakera server
         run: |
           for i in $(seq 1 30); do
-            curl -sf http://localhost:3300/health && break || true
+            curl -sf http://localhost:13300/health && break || true
             echo "Waiting for dakera server... attempt $i/30"
             sleep 2
           done
-          curl -sf http://localhost:3300/health || (echo "ERROR: dakera server failed to start" && exit 1)
+          curl -sf http://localhost:13300/health || (echo "ERROR: dakera server failed to start" && exit 1)
       - name: Run container integration tests
         env:
-          DAKERA_TEST_URL: http://localhost:3300
+          DAKERA_TEST_URL: http://localhost:13300
           DAKERA_TEST_KEY: test-integration-key
         run: cargo test --test integration -- --ignored --nocapture
