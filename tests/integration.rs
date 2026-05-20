@@ -1158,23 +1158,19 @@ fn container_namespace_create_and_list() {
     let url = container_url();
     let key = container_key();
 
-    // Create namespace
+    // 'namespace create' is a no-op that informs the user that namespaces
+    // are created implicitly on first vector upsert — verify the message.
     container_dk(&url, &key)
         .args(["namespace", "create", "integration-test-ns"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("integration-test-ns"));
 
-    // List should include our namespace
-    let assert = container_dk(&url, &key)
-        .args(["--format", "json", "namespace", "list"])
+    // 'namespace list' should succeed (empty is fine on a fresh server).
+    container_dk(&url, &key)
+        .args(["namespace", "list"])
         .assert()
         .success();
-
-    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
-    assert!(
-        stdout.contains("integration-test-ns"),
-        "namespace not found in list: {stdout}"
-    );
 }
 
 #[test]
