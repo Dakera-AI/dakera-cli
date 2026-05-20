@@ -116,7 +116,8 @@ jobs:
         ports:
           - 13300:3000
         env:
-          DAKERA_API_KEY: test-integration-key
+          DAKERA_ROOT_API_KEY: test-integration-key
+          DAKERA_AUTH_ENABLED: 'false'
         options: >-
           --health-cmd "curl -sf http://localhost:3000/health || exit 1"
           --health-interval 5s
