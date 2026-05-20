@@ -5,10 +5,9 @@ use clap::ArgMatches;
 use dakera_client::reqwest;
 use serde_json::Value;
 
+use crate::context::Context as Ctx;
 use crate::output;
-use crate::OutputFormat;
 
-/// Helper: build a reqwest client and make a GET request, returning JSON Value
 async fn admin_get(url: &str, path: &str) -> Result<Value> {
     let client = reqwest::Client::new();
     let resp = client
@@ -25,7 +24,6 @@ async fn admin_get(url: &str, path: &str) -> Result<Value> {
     serde_json::from_str(&body).with_context(|| "Failed to parse response JSON")
 }
 
-/// Helper: make a POST request with optional JSON body, returning JSON Value
 async fn admin_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value> {
     let client = reqwest::Client::new();
     let mut req = client.post(format!("{}{}", url, path));
@@ -49,7 +47,6 @@ async fn admin_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value
     }
 }
 
-/// Helper: make a DELETE request, returning JSON Value
 async fn admin_delete(url: &str, path: &str) -> Result<Value> {
     let client = reqwest::Client::new();
     let resp = client
@@ -70,7 +67,6 @@ async fn admin_delete(url: &str, path: &str) -> Result<Value> {
     }
 }
 
-/// Helper: make a PUT request with JSON body, returning JSON Value
 async fn admin_put(url: &str, path: &str, body: &Value) -> Result<Value> {
     let client = reqwest::Client::new();
     let resp = client
@@ -92,75 +88,64 @@ async fn admin_put(url: &str, path: &str, body: &Value) -> Result<Value> {
     }
 }
 
-fn print_value(value: &Value, format: OutputFormat) {
-    match format {
-        OutputFormat::Json => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(value).unwrap_or_default()
-            );
-        }
-        OutputFormat::Compact => {
-            println!("{}", serde_json::to_string(value).unwrap_or_default());
-        }
-        OutputFormat::Table => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(value).unwrap_or_default()
-            );
-        }
-    }
-}
-
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
+pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
     match matches.subcommand() {
         Some(("cluster-status", _sub)) => {
-            let result = admin_get(url, "/admin/cluster/status").await?;
+            let path = "/admin/cluster/status";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Cluster Status");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("cluster-nodes", _sub)) => {
-            let result = admin_get(url, "/admin/cluster/nodes").await?;
+            let path = "/admin/cluster/nodes";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Cluster Nodes");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("optimize", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
-            let result = admin_post(
-                url,
-                &format!("/admin/namespaces/{}/optimize", namespace),
-                None,
-            )
-            .await?;
+            let path = format!("/admin/namespaces/{}/optimize", namespace);
+            let t = ctx.log_request("POST", &path);
+            let result = admin_post(&ctx.url, &path, None).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!("Namespace '{}' optimization started", namespace));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("index-stats", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
-            let result = admin_get(
-                url,
-                &format!("/admin/indexes/stats?namespace={}", namespace),
-            )
-            .await?;
+            let path = format!("/admin/indexes/stats?namespace={}", namespace);
+            let t = ctx.log_request("GET", &path);
+            let result = admin_get(&ctx.url, &path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info(&format!("Index stats for '{}'", namespace));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("rebuild-indexes", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
+            let path = "/admin/indexes/rebuild";
             let body = serde_json::json!({ "namespace": namespace });
-            let result = admin_post(url, "/admin/indexes/rebuild", Some(&body)).await?;
+            let t = ctx.log_request("POST", path);
+            let result = admin_post(&ctx.url, path, Some(&body)).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!("Index rebuild started for '{}'", namespace));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("cache-stats", _sub)) => {
-            let result = admin_get(url, "/admin/cache/stats").await?;
+            let path = "/admin/cache/stats";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Cache Statistics");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("cache-clear", sub)) => {
@@ -169,114 +154,136 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 Some(ns) => serde_json::json!({ "namespace": ns }),
                 None => serde_json::json!({}),
             };
-            let result = admin_post(url, "/admin/cache/clear", Some(&body)).await?;
+            let path = "/admin/cache/clear";
+            let t = ctx.log_request("POST", path);
+            let result = admin_post(&ctx.url, path, Some(&body)).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             if let Some(ns) = namespace {
                 output::success(&format!("Cache cleared for namespace '{}'", ns));
             } else {
                 output::success("Cache cleared for all namespaces");
             }
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("config-get", _sub)) => {
-            let result = admin_get(url, "/admin/config").await?;
+            let path = "/admin/config";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Server Configuration");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("config-set", sub)) => {
             let key = sub.get_one::<String>("key").unwrap();
             let value = sub.get_one::<String>("value").unwrap();
-
-            // Try to parse value as JSON first, fall back to string
             let json_value: Value =
                 serde_json::from_str(value).unwrap_or(Value::String(value.clone()));
             let body = serde_json::json!({ key: json_value });
-            let result = admin_put(url, "/admin/config", &body).await?;
+            let path = "/admin/config";
+            let t = ctx.log_request("PUT", path);
+            let result = admin_put(&ctx.url, path, &body).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!("Configuration updated: {} = {}", key, value));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("quotas-get", _sub)) => {
-            let result = admin_get(url, "/admin/quotas").await?;
+            let path = "/admin/quotas";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Namespace Quotas");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("quotas-set", sub)) => {
             let data = sub.get_one::<String>("data").unwrap();
             let body: Value =
                 serde_json::from_str(data).with_context(|| "Invalid JSON for --data")?;
-            let result = admin_put(url, "/admin/quotas", &body).await?;
+            let path = "/admin/quotas";
+            let t = ctx.log_request("PUT", path);
+            let result = admin_put(&ctx.url, path, &body).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success("Quotas updated");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("slow-queries", sub)) => {
             let limit = sub.get_one::<u32>("limit").copied().unwrap_or(20);
             let min_duration = sub.get_one::<f64>("min-duration");
-
             let mut path = format!("/admin/slow-queries?limit={}", limit);
             if let Some(dur) = min_duration {
                 path.push_str(&format!("&min_duration_ms={}", dur));
             }
-
-            let result = admin_get(url, &path).await?;
+            let t = ctx.log_request("GET", &path);
+            let result = admin_get(&ctx.url, &path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Slow Queries");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("backup-create", sub)) => {
             let no_data = sub.get_flag("no-data");
-            let body = serde_json::json!({
-                "include_data": !no_data
-            });
-            let result = admin_post(url, "/admin/backups", Some(&body)).await?;
+            let body = serde_json::json!({ "include_data": !no_data });
+            let path = "/admin/backups";
+            let t = ctx.log_request("POST", path);
+            let result = admin_post(&ctx.url, path, Some(&body)).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success("Backup created");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("backup-list", _sub)) => {
-            let result = admin_get(url, "/admin/backups").await?;
+            let path = "/admin/backups";
+            let t = ctx.log_request("GET", path);
+            let result = admin_get(&ctx.url, path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::info("Backups");
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("backup-restore", sub)) => {
             let backup_id = sub.get_one::<String>("backup_id").unwrap();
             let body = serde_json::json!({ "backup_id": backup_id });
-            let result = admin_post(url, "/admin/backups/restore", Some(&body)).await?;
+            let path = "/admin/backups/restore";
+            let t = ctx.log_request("POST", path);
+            let result = admin_post(&ctx.url, path, Some(&body)).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!("Restore started from backup '{}'", backup_id));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("backup-delete", sub)) => {
             let backup_id = sub.get_one::<String>("backup_id").unwrap();
-            let result = admin_delete(url, &format!("/admin/backups/{}", backup_id)).await?;
+            let path = format!("/admin/backups/{}", backup_id);
+            let t = ctx.log_request("DELETE", &path);
+            let result = admin_delete(&ctx.url, &path).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!("Backup '{}' deleted", backup_id));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         Some(("configure-ttl", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
             let ttl_seconds = sub.get_one::<u64>("ttl-seconds").unwrap();
             let strategy = sub.get_one::<String>("strategy");
-
-            let mut body = serde_json::json!({
-                "ttl_seconds": ttl_seconds,
-            });
+            let mut body = serde_json::json!({ "ttl_seconds": ttl_seconds });
             if let Some(s) = strategy {
                 body.as_object_mut()
                     .unwrap()
                     .insert("strategy".to_string(), Value::String(s.clone()));
             }
-            let result =
-                admin_put(url, &format!("/admin/namespaces/{}/ttl", namespace), &body).await?;
+            let path = format!("/admin/namespaces/{}/ttl", namespace);
+            let t = ctx.log_request("PUT", &path);
+            let result = admin_put(&ctx.url, &path, &body).await;
+            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             output::success(&format!(
                 "TTL configured for '{}': {} seconds",
                 namespace, ttl_seconds
             ));
-            print_value(&result, format);
+            output::print_item(&result?, ctx.format);
         }
 
         _ => {

@@ -8,8 +8,8 @@ use dakera_client::knowledge::{
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct NodeRow {
@@ -33,8 +33,8 @@ pub struct DuplicateGroupRow {
     pub memory_ids: String,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("graph", sub_matches)) => {
@@ -50,7 +50,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 min_similarity,
             };
 
-            let response = client.knowledge_graph(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/graph", agent_id));
+            let response = client.knowledge_graph(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::info(&format!(
                 "Knowledge graph: {} nodes, {} edges",
@@ -76,7 +82,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .unwrap_or_else(|| "-".to_string()),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
 
             if !response.edges.is_empty() {
@@ -92,7 +98,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         relationship: e.relationship.unwrap_or_else(|| "-".to_string()),
                     })
                     .collect();
-                output::print_data(&edge_rows, format);
+                output::print_data(&edge_rows, ctx.format);
             }
 
             if let Some(clusters) = response.clusters {
@@ -121,7 +127,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 max_edges_per_node: max_edges,
             };
 
-            let response = client.full_knowledge_graph(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/full-graph", agent_id));
+            let response = client.full_knowledge_graph(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::info(&format!(
                 "Full knowledge graph for '{}': {} nodes, {} edges",
@@ -148,7 +160,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .unwrap_or_else(|| "-".to_string()),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
 
             if !response.edges.is_empty() {
@@ -164,7 +176,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         relationship: e.relationship.unwrap_or_else(|| "-".to_string()),
                     })
                     .collect();
-                output::print_data(&edge_rows, format);
+                output::print_data(&edge_rows, ctx.format);
             }
 
             if let Some(clusters) = response.clusters {
@@ -193,7 +205,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 dry_run,
             };
 
-            let response = client.summarize(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/summarize", agent_id));
+            let response = client.summarize(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if dry_run {
                 output::info(&format!(
@@ -226,7 +244,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 dry_run,
             };
 
-            let response = client.deduplicate(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/deduplicate", agent_id));
+            let response = client.deduplicate(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if dry_run {
                 output::info(&format!(
@@ -254,7 +278,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         memory_ids: group.join(", "),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 

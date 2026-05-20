@@ -1,18 +1,20 @@
 //! Vector management commands
 
-use anyhow::{Context, Result};
+use anyhow::{Context as ACtx, Result};
 use clap::ArgMatches;
 use dakera_client::{
     AggregationRequest, ColumnUpsertRequest, DakeraClient, DeleteRequest, ExportRequest,
     MultiVectorSearchRequest, QueryExplainRequest, QueryRequest, UnifiedQueryRequest,
     UpsertRequest, Vector,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
+use crate::retry;
 
 #[derive(Debug, Serialize)]
 pub struct QueryResultRow {
@@ -21,8 +23,8 @@ pub struct QueryResultRow {
     pub metadata: Option<serde_json::Value>,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("upsert", sub_matches)) => {
@@ -43,21 +45,43 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 total, namespace
             ));
 
-            let mut upserted = 0;
-            for chunk in vectors.chunks(batch_size) {
-                let request = UpsertRequest {
-                    vectors: chunk.to_vec(),
-                };
-                client.upsert(namespace, request).await?;
-                upserted += chunk.len();
-                println!(
-                    "  Progress: {}/{} ({:.1}%)",
-                    upserted,
-                    total,
-                    (upserted as f64 / total as f64) * 100.0
+            let pb = ProgressBar::new(total as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) ETA {eta}",
+                )
+                .unwrap()
+                .progress_chars("=>-"),
+            );
+
+            let mut upserted = 0usize;
+            for (batch_idx, chunk) in vectors.chunks(batch_size).enumerate() {
+                let chunk_vec = chunk.to_vec();
+                let ns = namespace.clone();
+                let client_ref = &client;
+
+                ctx.log_request(
+                    "POST",
+                    &format!("/v1/{}/vectors (batch {})", ns, batch_idx + 1),
                 );
+                retry::with_backoff(|| async {
+                    client_ref
+                        .upsert(
+                            &ns,
+                            UpsertRequest {
+                                vectors: chunk_vec.clone(),
+                            },
+                        )
+                        .await
+                        .map_err(anyhow::Error::from)
+                })
+                .await?;
+
+                upserted += chunk.len();
+                pb.set_position(upserted as u64);
             }
 
+            pb.finish_with_message("done");
             output::success(&format!("Successfully upserted {} vectors", total));
         }
 
@@ -83,7 +107,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 metadata,
             };
 
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/upsert-one", namespace));
             client.upsert_one(namespace, vector).await?;
+            ctx.log_response(t, "200 OK");
             output::success(&format!("Successfully upserted vector '{}'", id));
         }
 
@@ -109,7 +135,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 request = request.with_filter(f);
             }
 
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/query", namespace));
             let response = client.query(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
 
             if response.matches.is_empty() {
                 output::info("No matches found");
@@ -125,7 +153,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .map(|h| serde_json::Value::Object(h.into_iter().collect())),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
@@ -140,7 +168,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let request: QueryRequest =
                 serde_json::from_str(&content).context("Failed to parse query JSON")?;
 
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/query", namespace));
             let response = client.query(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
 
             if response.matches.is_empty() {
                 output::info("No matches found");
@@ -156,7 +186,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .map(|h| serde_json::Value::Object(h.into_iter().collect())),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
@@ -215,7 +245,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 std::process::exit(1);
             } else {
                 let request = DeleteRequest { ids };
+                let t = ctx.log_request("DELETE", &format!("/v1/{}/vectors", namespace));
                 let response = client.delete(namespace, request).await?;
+                ctx.log_response(t, "200 OK");
                 output::success(&format!("Deleted {} vectors", response.deleted_count));
             }
         }
@@ -235,9 +267,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 "Running multi-vector search on namespace '{}'",
                 namespace
             ));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/multi-search", namespace));
             let response = client.multi_vector_search(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
-            output::print_item(&json, format);
+            output::print_item(&json, ctx.format);
         }
 
         Some(("unified-query", sub_matches)) => {
@@ -255,9 +289,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 "Running unified query on namespace '{}'",
                 namespace
             ));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/unified-query", namespace));
             let response = client.unified_query(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
-            output::print_item(&json, format);
+            output::print_item(&json, ctx.format);
         }
 
         Some(("aggregate", sub_matches)) => {
@@ -272,9 +308,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 serde_json::from_str(&content).context("Failed to parse aggregation JSON")?;
 
             output::info(&format!("Running aggregation on namespace '{}'", namespace));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/aggregate", namespace));
             let response = client.aggregate(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
-            output::print_item(&json, format);
+            output::print_item(&json, ctx.format);
         }
 
         Some(("export", sub_matches)) => {
@@ -292,9 +330,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             }
 
             output::info(&format!("Exporting vectors from namespace '{}'", namespace));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/export", namespace));
             let response = client.export(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
-            output::print_item(&json, format);
+            output::print_item(&json, ctx.format);
         }
 
         Some(("explain", sub_matches)) => {
@@ -318,9 +358,11 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             .context("Failed to build explain request")?;
 
             output::info(&format!("Explaining query on namespace '{}'", namespace));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/explain", namespace));
             let response = client.explain_query(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             let json = serde_json::to_value(&response).context("Failed to serialize response")?;
-            output::print_item(&json, format);
+            output::print_item(&json, ctx.format);
         }
 
         Some(("upsert-columns", sub_matches)) => {
@@ -339,7 +381,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 "Upserting {} vectors (column format) to namespace '{}'",
                 count, namespace
             ));
+            let t = ctx.log_request("POST", &format!("/v1/{}/vectors/upsert-columns", namespace));
             client.upsert_columns(namespace, request).await?;
+            ctx.log_response(t, "200 OK");
             output::success(&format!(
                 "Successfully upserted {} vectors (column format)",
                 count

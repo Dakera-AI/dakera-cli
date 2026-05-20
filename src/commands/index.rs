@@ -4,16 +4,22 @@ use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::DakeraClient;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("stats", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let info = client.get_namespace(namespace).await?;
+            let t = ctx.log_request("GET", &format!("/v1/namespaces/{}", namespace));
+            let info = client.get_namespace(namespace).await;
+            match &info {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let info = info?;
 
             let pairs = [
                 ("Namespace", namespace.clone()),
@@ -37,14 +43,19 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
         }
 
         Some(("fulltext-stats", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let stats = client.fulltext_stats(namespace).await?;
-            output::print_item(&stats, format);
+            let t = ctx.log_request("GET", &format!("/v1/{}/fulltext/stats", namespace));
+            let stats = client.fulltext_stats(namespace).await;
+            match &stats {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            output::print_item(&stats?, ctx.format);
         }
 
         Some(("rebuild", sub_matches)) => {
@@ -85,8 +96,6 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 index_type, namespace
             ));
 
-            // Note: This would call a rebuild endpoint when available
-            // For now, compaction can help optimize indexes
             output::warning("Direct index rebuild not yet available");
             output::info("Use 'dk ops compact' to optimize storage and indexes");
         }

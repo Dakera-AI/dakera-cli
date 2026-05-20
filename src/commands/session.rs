@@ -5,8 +5,8 @@ use clap::ArgMatches;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::context::Context as Ctx;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct SessionRow {
@@ -24,14 +24,15 @@ pub struct SessionMemoryRow {
     pub score: f32,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("start", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let metadata_str = sub_matches.get_one::<String>("metadata");
 
+            let t = ctx.log_request("POST", &format!("/v1/{}/sessions", agent_id));
             let session = if let Some(m) = metadata_str {
                 let metadata: serde_json::Value =
                     serde_json::from_str(m).context("Invalid metadata JSON")?;
@@ -41,30 +42,42 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             } else {
                 client.start_session(agent_id).await?
             };
+            ctx.log_response(t, "200 OK");
 
             output::success(&format!(
                 "Session started (id: {}, agent: {})",
                 session.id, session.agent_id
             ));
 
-            output::print_item(&session, format);
+            output::print_item(&session, ctx.format);
         }
 
         Some(("end", sub_matches)) => {
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
             let summary = sub_matches.get_one::<String>("summary").cloned();
 
-            let response = client.end_session(session_id, summary).await?;
+            let t = ctx.log_request("PUT", &format!("/v1/sessions/{}/end", session_id));
+            let response = client.end_session(session_id, summary).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::success(&format!("Session '{}' ended", response.session.id));
-            output::print_item(&response, format);
+            output::print_item(&response, ctx.format);
         }
 
         Some(("get", sub_matches)) => {
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
 
-            let session = client.get_session(session_id).await?;
-            output::print_item(&session, format);
+            let t = ctx.log_request("GET", &format!("/v1/sessions/{}", session_id));
+            let session = client.get_session(session_id).await;
+            match &session {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            output::print_item(&session?, ctx.format);
         }
 
         Some(("list", sub_matches)) => {
@@ -72,7 +85,6 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let active_only = sub_matches.get_flag("active-only");
             let limit = *sub_matches.get_one::<u32>("limit").unwrap();
 
-            // Build query parameters for the list endpoint
             let mut query_params = Vec::new();
             if let Some(aid) = agent_id {
                 query_params.push(format!("agent_id={}", aid));
@@ -88,14 +100,20 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 format!("?{}", query_params.join("&"))
             };
 
-            // Use reqwest directly for query params the client doesn't support
-            let list_url = format!("{}/v1/sessions{}", url, query_string);
+            let path = format!("/v1/sessions{}", query_string);
+            let t = ctx.log_request("GET", &path);
+            let list_url = format!("{}{}", ctx.url, path);
             let response = dakera_client::reqwest::get(&list_url).await?;
+            let status_str = if response.status().is_success() {
+                "200 OK"
+            } else {
+                "ERR"
+            };
+            ctx.log_response(t, status_str);
 
             if response.status().is_success() {
                 let body: serde_json::Value = response.json().await?;
 
-                // The API returns { sessions: [...], total: N }
                 let sessions = body
                     .get("sessions")
                     .and_then(|v| v.as_array())
@@ -122,7 +140,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             })
                         })
                         .collect();
-                    output::print_data(&rows, format);
+                    output::print_data(&rows, ctx.format);
                 }
             } else {
                 let status = response.status().as_u16();
@@ -135,7 +153,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         Some(("memories", sub_matches)) => {
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
 
-            let response = client.session_memories(session_id).await?;
+            let t = ctx.log_request("GET", &format!("/v1/sessions/{}/memories", session_id));
+            let response = client.session_memories(session_id).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if response.memories.is_empty() {
                 output::info(&format!("No memories found for session '{}'", session_id));
@@ -156,7 +180,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         score: m.score,
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 

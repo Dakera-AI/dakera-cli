@@ -9,8 +9,8 @@ use dakera_client::memory::{
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct MemoryRow {
@@ -39,8 +39,8 @@ fn memory_type_to_string(mt: &MemoryType) -> String {
     }
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("store", sub_matches)) => {
@@ -61,7 +61,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 request = request.with_session(sid);
             }
 
-            let response = client.store_memory(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/memories", agent_id));
+            let response = client.store_memory(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::success(&format!(
                 "Memory stored (id: {}, namespace: {})",
@@ -81,7 +87,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 request = request.with_type(parse_memory_type(t));
             }
 
-            let response = client.recall(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/memories/recall", agent_id));
+            let response = client.recall(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if response.memories.is_empty() {
                 output::info("No memories found");
@@ -102,7 +114,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         score: m.score,
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
@@ -110,8 +122,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let _agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
 
-            let memory = client.get_memory(memory_id).await?;
-            output::print_item(&memory, format);
+            let t = ctx.log_request("GET", &format!("/v1/memories/{}", memory_id));
+            let memory = client.get_memory(memory_id).await;
+            match &memory {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            output::print_item(&memory?, ctx.format);
         }
 
         Some(("update", sub_matches)) => {
@@ -128,8 +145,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 memory_type,
             };
 
-            let response = client.update_memory(agent_id, memory_id, request).await?;
-            output::success(&format!("Memory '{}' updated", response.memory_id));
+            let t = ctx.log_request("PUT", &format!("/v1/{}/memories/{}", agent_id, memory_id));
+            let response = client.update_memory(agent_id, memory_id, request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            output::success(&format!("Memory '{}' updated", response?.memory_id));
         }
 
         Some(("forget", sub_matches)) => {
@@ -140,7 +162,16 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 agent_id.clone(),
                 vec![memory_id.clone()],
             );
-            let response = client.forget(request).await?;
+            let t = ctx.log_request(
+                "DELETE",
+                &format!("/v1/{}/memories/{}", agent_id, memory_id),
+            );
+            let response = client.forget(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::success(&format!(
                 "Deleted {} memory (id: {})",
@@ -160,7 +191,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 request = request.with_type(parse_memory_type(t));
             }
 
-            let response = client.search_memories(request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/memories/search", agent_id));
+            let response = client.search_memories(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if response.memories.is_empty() {
                 output::info("No memories found");
@@ -181,7 +218,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         score: m.score,
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
@@ -200,7 +237,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 importance: value,
             };
 
+            let t = ctx.log_request("PUT", &format!("/v1/{}/memories/importance", agent_id));
             client.update_importance(agent_id, request).await?;
+            ctx.log_response(t, "200 OK");
             output::success(&format!(
                 "Updated importance to {} for {} memories",
                 value,
@@ -221,7 +260,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 ..Default::default()
             };
 
-            let response = client.consolidate(agent_id, request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/memories/consolidate", agent_id));
+            let response = client.consolidate(agent_id, request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             if dry_run {
                 output::info(&format!(
@@ -250,7 +295,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 relevance_score: score,
             };
 
-            let response = client.memory_feedback(agent_id, request).await?;
+            let t = ctx.log_request("POST", &format!("/v1/{}/memories/feedback", agent_id));
+            let response = client.memory_feedback(agent_id, request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
 
             output::success(&format!("Feedback submitted (status: {})", response.status));
             if let Some(importance) = response.updated_importance {

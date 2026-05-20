@@ -6,8 +6,8 @@ use dakera_client::{reqwest, CompactionRequest, DakeraClient, OpsStats};
 use nu_ansi_term::{Color, Style};
 use serde::Serialize;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct JobRow {
@@ -18,12 +18,14 @@ pub struct JobRow {
     pub created_at: String,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("stats", _)) => {
+            let t = ctx.log_request("GET", "/ops/stats");
             let stats: OpsStats = client.ops_stats().await?;
+            ctx.log_response(t, "200 OK");
 
             let state_label = match stats.state.as_str() {
                 "healthy" => format!("{} (healthy)", stats.state),
@@ -44,12 +46,14 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
         }
 
         Some(("diagnostics", _)) => {
+            let t = ctx.log_request("GET", "/ops/diagnostics");
             let diag = client.diagnostics().await?;
+            ctx.log_response(t, "200 OK");
 
             let pairs = [
                 ("Server Version", diag.system.version.clone()),
@@ -70,7 +74,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
 
             let cyan = Style::new().fg(Color::Cyan).bold();
@@ -118,7 +122,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
         }
 
         Some(("jobs", _)) => {
+            let t = ctx.log_request("GET", "/ops/jobs");
             let jobs = client.list_jobs().await?;
+            ctx.log_response(t, "200 OK");
 
             if jobs.is_empty() {
                 output::info("No background jobs");
@@ -133,13 +139,15 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         created_at: format_timestamp(j.created_at),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
         Some(("job", sub_matches)) => {
             let id = sub_matches.get_one::<String>("id").unwrap();
+            let t = ctx.log_request("GET", &format!("/ops/jobs/{}", id));
             let job = client.get_job(id).await?;
+            ctx.log_response(t, "200 OK");
 
             match job {
                 Some(j) => {
@@ -156,7 +164,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .iter()
                             .map(|(k, v)| (*k, v.clone()))
                             .collect::<Vec<_>>(),
-                        format,
+                        ctx.format,
                     );
                 }
                 None => {
@@ -177,7 +185,9 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 force,
             };
 
+            let t = ctx.log_request("POST", "/ops/compact");
             let response = client.compact(request).await?;
+            ctx.log_response(t, "200 OK");
 
             output::success(&format!("Compaction started (job: {})", response.job_id));
             output::info(&response.message);
@@ -216,19 +226,24 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             }
 
             output::info("Requesting graceful shutdown...");
+            let t = ctx.log_request("POST", "/ops/shutdown");
             client.shutdown().await?;
+            ctx.log_response(t, "200 OK");
             output::success("Shutdown request sent");
         }
 
         Some(("metrics", _)) => {
-            // Fetch Prometheus metrics
-            let metrics_url = format!("{}/metrics", url);
+            let path = "/metrics";
+            let t = ctx.log_request("GET", path);
+            let metrics_url = format!("{}{}", ctx.url, path);
             let response = reqwest::get(&metrics_url).await?;
 
             if response.status().is_success() {
+                ctx.log_response(t, "200 OK");
                 let text = response.text().await?;
                 println!("{}", text);
             } else {
+                ctx.log_response(t, "ERR");
                 output::error("Failed to fetch metrics. Is the metrics endpoint enabled?");
                 std::process::exit(1);
             }
@@ -256,7 +271,6 @@ fn format_duration(seconds: u64) -> String {
 }
 
 fn format_timestamp(ts: u64) -> String {
-    // Simple timestamp formatting (seconds since epoch)
     let secs_ago = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs().saturating_sub(ts))
