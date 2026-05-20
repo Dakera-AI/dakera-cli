@@ -5,8 +5,8 @@ use clap::ArgMatches;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct AgentRow {
@@ -31,12 +31,18 @@ pub struct AgentSessionRow {
     pub ended_at: String,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("list", _)) => {
-            let agents = client.list_agents().await?;
+            let t = ctx.log_request("GET", "/v1/agents");
+            let agents = client.list_agents().await;
+            match &agents {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let agents = agents?;
 
             if agents.is_empty() {
                 output::info("No agents found");
@@ -50,7 +56,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         active_sessions: a.active_sessions,
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
@@ -59,7 +65,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let memory_type = sub_matches.get_one::<String>("type").map(|s| s.as_str());
             let limit = sub_matches.get_one::<u32>("limit").copied();
 
-            let memories = client.agent_memories(agent_id, memory_type, limit).await?;
+            let t = ctx.log_request("GET", &format!("/v1/agents/{}/memories", agent_id));
+            let memories = client.agent_memories(agent_id, memory_type, limit).await;
+            match &memories {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let memories = memories?;
 
             if memories.is_empty() {
                 output::info(&format!("No memories found for agent '{}'", agent_id));
@@ -78,14 +90,20 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                         importance: m.importance,
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
         Some(("stats", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
 
-            let stats = client.agent_stats(agent_id).await?;
+            let t = ctx.log_request("GET", &format!("/v1/agents/{}/stats", agent_id));
+            let stats = client.agent_stats(agent_id).await;
+            match &stats {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let stats = stats?;
 
             let pairs = [
                 ("Agent ID", stats.agent_id),
@@ -114,7 +132,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
 
             if !stats.memories_by_type.is_empty() {
@@ -132,9 +150,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             let limit = sub_matches.get_one::<u32>("limit").copied();
 
             let active_filter = if active_only { Some(true) } else { None };
-            let sessions = client
-                .agent_sessions(agent_id, active_filter, limit)
-                .await?;
+            let t = ctx.log_request("GET", &format!("/v1/agents/{}/sessions", agent_id));
+            let sessions = client.agent_sessions(agent_id, active_filter, limit).await;
+            match &sessions {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let sessions = sessions?;
 
             if sessions.is_empty() {
                 output::info(&format!("No sessions found for agent '{}'", agent_id));
@@ -155,7 +177,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                             .unwrap_or_else(|| "active".to_string()),
                     })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 

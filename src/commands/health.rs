@@ -4,101 +4,125 @@ use anyhow::Result;
 use dakera_client::DakeraClient;
 use nu_ansi_term::{Color, Style};
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
-pub async fn execute(url: &str, detailed: bool, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, detailed: bool) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
-    // Check basic health
-    let health = client.health().await;
+    if detailed {
+        let t = ctx.log_request("GET", "/health");
+        let health_result = client.health().await;
+        match &health_result {
+            Ok(_) => ctx.log_response(t, "200 OK"),
+            Err(_) => ctx.log_response(t, "ERR"),
+        }
+        let h = health_result?;
 
-    match health {
-        Ok(h) => {
-            if detailed {
-                // Get additional health information
-                let ready = client.ready().await.ok();
-                let live = client.live().await.unwrap_or(false);
-                let diagnostics = client.diagnostics().await.ok();
+        let t = ctx.log_request("GET", "/health/ready");
+        let ready = client.ready().await.ok();
+        ctx.log_response(t, "200 OK");
 
-                let green = Style::new().fg(Color::Green);
-                let red = Style::new().fg(Color::Red);
-                let yellow = Style::new().fg(Color::Yellow);
-                let cyan = Style::new().fg(Color::Cyan).bold();
+        let t = ctx.log_request("GET", "/health/live");
+        let live = client.live().await.unwrap_or(false);
+        ctx.log_response(t, "200 OK");
 
-                let pairs = [
-                    (
-                        "Status",
-                        if h.healthy {
-                            green.paint("Healthy").to_string()
-                        } else {
-                            red.paint("Unhealthy").to_string()
-                        },
-                    ),
-                    (
-                        "Live",
-                        if live {
+        let t = ctx.log_request("GET", "/ops/diagnostics");
+        let diagnostics = client.diagnostics().await.ok();
+        ctx.log_response(t, "200 OK");
+
+        let green = Style::new().fg(Color::Green);
+        let red = Style::new().fg(Color::Red);
+        let yellow = Style::new().fg(Color::Yellow);
+        let cyan = Style::new().fg(Color::Cyan).bold();
+
+        let pairs = [
+            (
+                "Status",
+                if h.healthy {
+                    green.paint("Healthy").to_string()
+                } else {
+                    red.paint("Unhealthy").to_string()
+                },
+            ),
+            (
+                "Live",
+                if live {
+                    green.paint("Yes").to_string()
+                } else {
+                    red.paint("No").to_string()
+                },
+            ),
+            (
+                "Ready",
+                ready
+                    .as_ref()
+                    .map(|r| {
+                        if r.ready {
                             green.paint("Yes").to_string()
                         } else {
-                            red.paint("No").to_string()
-                        },
-                    ),
-                    (
-                        "Ready",
-                        ready
-                            .as_ref()
-                            .map(|r| {
-                                if r.ready {
-                                    green.paint("Yes").to_string()
-                                } else {
-                                    yellow.paint("No").to_string()
-                                }
-                            })
-                            .unwrap_or_else(|| "Unknown".to_string()),
-                    ),
-                    (
-                        "Version",
-                        h.version.unwrap_or_else(|| "Unknown".to_string()),
-                    ),
-                    (
-                        "Uptime",
-                        h.uptime_seconds
-                            .map(format_duration)
-                            .unwrap_or_else(|| "Unknown".to_string()),
-                    ),
-                ];
+                            yellow.paint("No").to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| "Unknown".to_string()),
+            ),
+            (
+                "Version",
+                h.version.unwrap_or_else(|| "Unknown".to_string()),
+            ),
+            (
+                "Uptime",
+                h.uptime_seconds
+                    .map(format_duration)
+                    .unwrap_or_else(|| "Unknown".to_string()),
+            ),
+        ];
 
-                output::print_kv(
-                    &pairs
-                        .iter()
-                        .map(|(k, v)| (*k, v.clone()))
-                        .collect::<Vec<_>>(),
-                    format,
-                );
+        output::print_kv(
+            &pairs
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect::<Vec<_>>(),
+            ctx.format,
+        );
 
-                if let Some(diag) = diagnostics {
-                    println!();
-                    println!("{}", cyan.paint("System Diagnostics:"));
-                    println!(
-                        "  Memory Used: {} MB",
-                        diag.resources.memory_bytes / 1024 / 1024
-                    );
-                    println!("  Threads: {}", diag.resources.thread_count);
-                    println!("  Open FDs: {}", diag.resources.open_fds);
-                    println!("  Active Jobs: {}", diag.active_jobs);
-                }
-            } else if h.healthy {
-                output::success(&format!("Server at {} is healthy", url));
-                if let Some(v) = h.version {
-                    println!("  Version: {}", v);
-                }
-            } else {
-                output::error(&format!("Server at {} is unhealthy", url));
-            }
+        if let Some(diag) = diagnostics {
+            println!();
+            println!("{}", cyan.paint("System Diagnostics:"));
+            println!(
+                "  Memory Used: {} MB",
+                diag.resources.memory_bytes / 1024 / 1024
+            );
+            println!("  Threads: {}", diag.resources.thread_count);
+            println!("  Open FDs: {}", diag.resources.open_fds);
+            println!("  Active Jobs: {}", diag.active_jobs);
         }
-        Err(e) => {
-            output::error(&format!("Failed to connect to server at {}: {}", url, e));
-            std::process::exit(1);
+    } else {
+        let t = ctx.log_request("GET", "/health");
+        let health = client.health().await;
+        match &health {
+            Ok(_) => ctx.log_response(t, "200 OK"),
+            Err(_) => ctx.log_response(t, "ERR"),
+        }
+
+        match health {
+            Ok(h) => {
+                if h.healthy {
+                    output::success(&format!("Server at {} is healthy", ctx.url));
+                    if let Some(v) = h.version {
+                        println!("  Version: {}", v);
+                    }
+                } else {
+                    output::error(&format!("Server at {} is unhealthy", ctx.url));
+                }
+            }
+            Err(e) => {
+                output::error(&format!(
+                    "Failed to connect to server at {}: {}",
+                    ctx.url, e
+                ));
+                std::process::exit(1);
+            }
         }
     }
 

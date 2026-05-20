@@ -4,11 +4,11 @@ use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::DakeraClient;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("overview", sub_matches)) => {
@@ -17,7 +17,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .get_one::<String>("namespace")
                 .map(|s| s.as_str());
 
-            let overview = client.analytics_overview(period, namespace).await?;
+            let t = ctx.log_request("GET", "/v1/analytics/overview");
+            let overview = client.analytics_overview(period, namespace).await;
+            match &overview {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let overview = overview?;
 
             let pairs = [
                 ("Total Queries", overview.total_queries.to_string()),
@@ -41,7 +47,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
         }
 
@@ -51,7 +57,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .get_one::<String>("namespace")
                 .map(|s| s.as_str());
 
-            let latency = client.analytics_latency(period, namespace).await?;
+            let t = ctx.log_request("GET", "/v1/analytics/latency");
+            let latency = client.analytics_latency(period, namespace).await;
+            match &latency {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let latency = latency?;
 
             let pairs = [
                 ("Period", latency.period.clone()),
@@ -67,7 +79,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
 
             if !latency.by_operation.is_empty() {
@@ -88,7 +100,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .get_one::<String>("namespace")
                 .map(|s| s.as_str());
 
-            let throughput = client.analytics_throughput(period, namespace).await?;
+            let t = ctx.log_request("GET", "/v1/analytics/throughput");
+            let throughput = client.analytics_throughput(period, namespace).await;
+            match &throughput {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let throughput = throughput?;
 
             let pairs = [
                 ("Period", throughput.period.clone()),
@@ -104,7 +122,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
 
             if !throughput.by_operation.is_empty() {
@@ -121,7 +139,13 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 .get_one::<String>("namespace")
                 .map(|s| s.as_str());
 
-            let storage = client.analytics_storage(namespace).await?;
+            let t = ctx.log_request("GET", "/v1/analytics/storage");
+            let storage = client.analytics_storage(namespace).await;
+            match &storage {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let storage = storage?;
 
             let pairs = [
                 ("Total", format_bytes(storage.total_bytes)),
@@ -134,7 +158,7 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .iter()
                     .map(|(k, v)| (*k, v.clone()))
                     .collect::<Vec<_>>(),
-                format,
+                ctx.format,
             );
 
             if !storage.by_namespace.is_empty() {
@@ -160,7 +184,6 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
     Ok(())
 }
 
-/// Format bytes into human-readable string
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -180,7 +203,6 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-/// Format seconds into human-readable duration
 fn format_duration(seconds: u64) -> String {
     let days = seconds / 86400;
     let hours = (seconds % 86400) / 3600;

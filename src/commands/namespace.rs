@@ -5,20 +5,26 @@ use clap::ArgMatches;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::context::Context;
 use crate::output;
-use crate::OutputFormat;
 
 #[derive(Debug, Serialize)]
 pub struct NamespaceRow {
     pub name: String,
 }
 
-pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> Result<()> {
-    let client = DakeraClient::new(url)?;
+pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
+    let client = DakeraClient::new(&ctx.url)?;
 
     match matches.subcommand() {
         Some(("list", _)) => {
-            let namespaces = client.list_namespaces().await?;
+            let t = ctx.log_request("GET", "/v1/namespaces");
+            let namespaces = client.list_namespaces().await;
+            match &namespaces {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let namespaces = namespaces?;
 
             if namespaces.is_empty() {
                 output::info("No namespaces found");
@@ -27,14 +33,20 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     .into_iter()
                     .map(|name| NamespaceRow { name })
                     .collect();
-                output::print_data(&rows, format);
+                output::print_data(&rows, ctx.format);
             }
         }
 
         Some(("get", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").unwrap();
-            let info = client.get_namespace(name).await?;
-            output::print_item(&info, format);
+            let path = format!("/v1/namespaces/{}", name);
+            let t = ctx.log_request("GET", &path);
+            let info = client.get_namespace(name).await;
+            match &info {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            output::print_item(&info?, ctx.format);
         }
 
         Some(("create", sub_matches)) => {
@@ -92,7 +104,6 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                 }
             }
 
-            // Note: Dakera doesn't have a delete namespace endpoint yet
             output::warning("Namespace deletion is not yet implemented in the server");
             output::info("To remove all vectors from a namespace, use 'dk vector delete --all'");
         }
@@ -101,15 +112,27 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
             match sub_matches.subcommand() {
                 Some(("get", get_matches)) => {
                     let ns = get_matches.get_one::<String>("namespace").unwrap();
-                    let policy = client.get_memory_policy(ns).await?;
-                    output::print_item(&policy, format);
+                    let path = format!("/v1/namespaces/{}/memory_policy", ns);
+                    let t = ctx.log_request("GET", &path);
+                    let policy = client.get_memory_policy(ns).await;
+                    match &policy {
+                        Ok(_) => ctx.log_response(t, "200 OK"),
+                        Err(_) => ctx.log_response(t, "ERR"),
+                    }
+                    output::print_item(&policy?, ctx.format);
                 }
 
                 Some(("set", set_matches)) => {
                     let ns = set_matches.get_one::<String>("namespace").unwrap();
 
                     // Fetch the current policy so we only change what the user specified.
-                    let mut policy = client.get_memory_policy(ns).await?;
+                    let t = ctx.log_request("GET", &format!("/v1/namespaces/{}/memory_policy", ns));
+                    let policy = client.get_memory_policy(ns).await;
+                    match &policy {
+                        Ok(_) => ctx.log_response(t, "200 OK"),
+                        Err(_) => ctx.log_response(t, "ERR"),
+                    }
+                    let mut policy = policy?;
 
                     if let Some(v) = set_matches.get_one::<u64>("working-ttl") {
                         policy.working_ttl_seconds = Some(*v);
@@ -163,9 +186,15 @@ pub async fn execute(url: &str, matches: &ArgMatches, format: OutputFormat) -> R
                     // consolidated_count is read-only — clear it before sending
                     policy.consolidated_count = None;
 
-                    let updated = client.set_memory_policy(ns, policy).await?;
+                    let path = format!("/v1/namespaces/{}/memory_policy", ns);
+                    let t = ctx.log_request("PUT", &path);
+                    let updated = client.set_memory_policy(ns, policy).await;
+                    match &updated {
+                        Ok(_) => ctx.log_response(t, "200 OK"),
+                        Err(_) => ctx.log_response(t, "ERR"),
+                    }
                     output::success(&format!("Memory policy updated for namespace '{}'", ns));
-                    output::print_item(&updated, format);
+                    output::print_item(&updated?, ctx.format);
                 }
 
                 _ => {

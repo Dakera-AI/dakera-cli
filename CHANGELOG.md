@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-20
+
+### Added
+
+- **Aligned table output** (`comfy-table v7`): `--format table` now renders properly aligned
+  columns with bold cyan headers instead of falling back to JSON pretty-print.
+- **Progress bar for bulk upsert** (`indicatif v0.17`): `dk vector upsert --file big.json`
+  shows a spinner, elapsed time, item count, and ETA for large batches.
+- **Verbose HTTP logging** (`--verbose` flag): all commands now log `-->` request and `<--`
+  response lines with elapsed milliseconds via the `Context` struct and `tracing`.
+- **Exponential backoff retry** (`src/retry.rs`): transient network errors are retried up to
+  3 times with delays of 100 ms / 500 ms / 2 s; 4xx client errors are never retried.
+- `src/context.rs`: new `Context` struct threading `url`, `format`, and `verbose` through
+  all command modules — eliminates per-call `url`/`format` argument threading.
+- `src/cli.rs`: all `build_*_command()` builder functions extracted from `main.rs`.
+
+### Changed
+
+- `src/main.rs` reduced from ~1,400 lines to ~125 lines (routing + init only).
+- All command modules updated to accept `&Context` instead of `(url: &str, ..., format)`.
+- `.gitignore` extended to exclude `*.db` and `ruvector.db` test artifacts.
+
+### Dependencies
+
+- Added `comfy-table = "7"` for aligned column rendering.
+- Added `indicatif = "0.17"` for progress bars.
+
 ## [0.5.5] - 2026-04-28
 
 ### Fixed

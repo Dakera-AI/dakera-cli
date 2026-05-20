@@ -21,3 +21,7 @@ Thumbs.db
 *.pem
 *.p12
 credentials.json
+
+# Local database files (test artifacts)
+*.db
+ruvector.db
