@@ -71,12 +71,9 @@ jobs:
           path: ./debs
 
       - name: Import GPG signing key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
-          # Trust the key fully
-          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG hello@dakera.ai \
-            | grep sec | head -1 | awk '{print $2}' | cut -d/ -f2)
-          echo "${KEY_ID}:6:" | gpg --import-ownertrust
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Checkout apt-repo
         uses: actions/checkout@v4
@@ -117,9 +114,9 @@ jobs:
             release dists/stable/ > dists/stable/Release
 
           # Sign the Release file
-          gpg --batch --yes --default-key "hello@dakera.ai" \
+          gpg --batch --yes -u hello@dakera.ai \
             --clearsign -o dists/stable/InRelease dists/stable/Release
-          gpg --batch --yes --default-key "hello@dakera.ai" \
+          gpg --batch --yes -u hello@dakera.ai \
             -abs -o dists/stable/Release.gpg dists/stable/Release
 
           echo "APT repo updated successfully"
@@ -150,11 +147,9 @@ jobs:
           path: ./rpms
 
       - name: Import GPG signing key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
-          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG hello@dakera.ai \
-            | grep sec | head -1 | awk '{print $2}' | cut -d/ -f2)
-          echo "${KEY_ID}:6:" | gpg --import-ownertrust
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Checkout rpm-repo
         uses: actions/checkout@v4
@@ -179,7 +174,7 @@ jobs:
           createrepo_c --update rpm-repo/
 
           # Sign the repository metadata so dnf/yum clients can verify integrity
-          gpg --batch --yes --default-key "hello@dakera.ai" \
+          gpg --batch --yes -u hello@dakera.ai \
             -abs -o rpm-repo/repodata/repomd.xml.asc rpm-repo/repodata/repomd.xml
 
           echo "RPM repo updated and signed successfully"
