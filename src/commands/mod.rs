@@ -1,12 +1,9 @@
 //! CLI command implementations
 
-pub mod admin;
 pub mod agent;
 pub mod analytics;
 pub mod completion;
 pub mod config;
-pub mod entity;
-pub mod graph;
 pub mod health;
 pub mod index;
 pub mod init;
@@ -17,7 +14,6 @@ pub mod namespace;
 pub mod ops;
 pub mod session;
 pub mod text;
-pub mod vector;
 
 /// Build a reqwest client that forwards DAKERA_API_KEY as a Bearer token when set.
 pub(crate) fn authed_client() -> dakera_client::reqwest::Client {

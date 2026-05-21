@@ -14,8 +14,6 @@
 //!   - `memory store/recall/get/forget/update/search/importance/consolidate/feedback`
 //!   - `agent list/stats/memories/sessions`
 //!   - `session start/end/list/memories`
-//!   - `vector upsert-one/delete`
-//!   - `knowledge graph/deduplicate`
 //!   - `keys list/create/delete`
 //!   - Error responses (401, 500)
 
@@ -858,87 +856,6 @@ fn session_memories_empty_shows_message() {
 }
 
 // ---------------------------------------------------------------------------
-// vector upsert-one
-// ---------------------------------------------------------------------------
-
-#[test]
-fn vector_upsert_one_success() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/namespaces/test-ns/vectors");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({ "upserted_count": 1 }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "vector",
-        "upsert-one",
-        "--namespace",
-        "test-ns",
-        "--id",
-        "vec-001",
-        "--values",
-        "0.1,0.2,0.3",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("vec-001"));
-}
-
-// ---------------------------------------------------------------------------
-// vector delete
-// ---------------------------------------------------------------------------
-
-#[test]
-fn vector_delete_by_ids_success() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST)
-            .path("/v1/namespaces/test-ns/vectors/delete");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({ "deleted_count": 2 }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "vector",
-        "delete",
-        "--namespace",
-        "test-ns",
-        "--ids",
-        "vec-001,vec-002",
-        "--yes",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("Deleted 2 vectors"));
-}
-
-#[test]
-fn vector_delete_dry_run_skips_server_call() {
-    // dry-run should print message and exit 0 without contacting server
-    dk().args([
-        "--url",
-        "http://127.0.0.1:1",
-        "vector",
-        "delete",
-        "--namespace",
-        "test-ns",
-        "--ids",
-        "vec-001",
-        "--dry-run",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("[dry-run]"));
-}
-
-// ---------------------------------------------------------------------------
 // knowledge graph
 // ---------------------------------------------------------------------------
 
@@ -1416,29 +1333,6 @@ fn container_agent_list() {
         .success();
 }
 
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_vector_operations() {
-    let url = container_url();
-    let key = container_key();
-
-    // Upsert a single vector (3-dim for simplicity)
-    container_dk(&url, &key)
-        .args([
-            "vector",
-            "upsert-one",
-            "--namespace",
-            "integration-test-ns",
-            "--id",
-            "integration-vec-001",
-            "--values",
-            "0.1,0.2,0.3",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("integration-vec-001"));
-}
-
 // ---------------------------------------------------------------------------
 // Container — memory extended operations
 // ---------------------------------------------------------------------------
@@ -1673,42 +1567,6 @@ fn container_ops_compact_dry_run() {
         .code(predicate::in_iter([0i32, 3]));
 }
 
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_admin_cluster_status() {
-    let url = container_url();
-    let key = container_key();
-
-    container_dk(&url, &key)
-        .args(["admin", "cluster-status"])
-        .assert()
-        .success();
-}
-
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_admin_cache_stats() {
-    let url = container_url();
-    let key = container_key();
-
-    container_dk(&url, &key)
-        .args(["admin", "cache-stats"])
-        .assert()
-        .success();
-}
-
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_admin_backup_list() {
-    let url = container_url();
-    let key = container_key();
-
-    container_dk(&url, &key)
-        .args(["admin", "backup-list"])
-        .assert()
-        .success();
-}
-
 // ---------------------------------------------------------------------------
 // Container — index management
 // ---------------------------------------------------------------------------
@@ -1791,7 +1649,7 @@ fn container_config_show() {
 }
 
 // ---------------------------------------------------------------------------
-// Container — new commands: text, graph, entity
+// Container — new commands: text
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -1816,37 +1674,6 @@ fn container_text_search() {
     // Accept success or not-found — endpoint may not be in the current server version
     container_dk(&url, &key)
         .args(["text", "search", "fulltext search"])
-        .assert()
-        .code(predicate::in_iter([0i32, 3]));
-}
-
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_graph_export() {
-    let url = container_url();
-    let key = container_key();
-
-    // Accept success or not-found — endpoint may not be in the current server version
-    container_dk(&url, &key)
-        .args(["graph", "export", "integration-agent"])
-        .assert()
-        .code(predicate::in_iter([0i32, 3]));
-}
-
-#[test]
-#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_entity_extract() {
-    let url = container_url();
-    let key = container_key();
-
-    // Accept success or not-found — endpoint may not be in the current server version
-    container_dk(&url, &key)
-        .args([
-            "entity",
-            "extract",
-            "entity-test-agent",
-            "Alice works at Dakera AI in San Francisco",
-        ])
         .assert()
         .code(predicate::in_iter([0i32, 3]));
 }
@@ -1971,104 +1798,3 @@ fn memory_batch_forget_dry_run_shows_preview() {
     .stdout(predicate::str::contains("dry-run"));
 }
 
-#[test]
-fn graph_export_returns_success() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/graph/export");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({
-                "nodes": [],
-                "edges": [],
-                "format": "json"
-            }));
-    });
-
-    dk().args(["--url", &server.base_url(), "graph", "export", "test-agent"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("exported"));
-}
-
-#[test]
-fn graph_traverse_returns_nodes() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/graph/traverse");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({
-                "nodes": [
-                    {"id": "mem-001", "content": "start node", "depth": 0},
-                    {"id": "mem-002", "content": "connected node", "depth": 1}
-                ],
-                "edges": [
-                    {"source": "mem-001", "target": "mem-002", "similarity": 0.9}
-                ]
-            }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "graph",
-        "traverse",
-        "test-agent",
-        "mem-001",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("2 nodes"));
-}
-
-#[test]
-fn entity_extract_returns_entities() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/entities/extract");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({
-                "entities": [
-                    {"entity": "Alice", "type": "PERSON", "confidence": 0.99},
-                    {"entity": "Dakera", "type": "ORG", "confidence": 0.95}
-                ]
-            }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "entity",
-        "extract",
-        "test-agent",
-        "Alice works at Dakera",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("2 entity"));
-}
-
-#[test]
-fn entity_extract_no_entities_shows_message() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/entities/extract");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({ "entities": [] }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "entity",
-        "extract",
-        "test-agent",
-        "no entities here",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("No entities found"));
-}

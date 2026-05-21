@@ -12,8 +12,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::cli::build_cli;
 use crate::commands::{
-    admin, agent, analytics, completion, config as config_cmd, entity, graph, health, index, init,
-    keys, knowledge, memory, namespace, ops, session, text, vector,
+    agent, analytics, completion, config as config_cmd, health, index, init, keys, knowledge,
+    memory, namespace, ops, session, text,
 };
 use crate::config::Config;
 use crate::context::Context;
@@ -144,7 +144,6 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
             health::execute(&ctx, detailed).await?;
         }
         Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
-        Some(("vector", sub_matches)) => vector::execute(&ctx, sub_matches).await?,
         Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
         Some(("ops", sub_matches)) => ops::execute(&ctx, sub_matches).await?,
         Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,
@@ -152,7 +151,6 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
         Some(("agent", sub_matches)) => agent::execute(&ctx, sub_matches).await?,
         Some(("knowledge", sub_matches)) => knowledge::execute(&ctx, sub_matches).await?,
         Some(("analytics", sub_matches)) => analytics::execute(&ctx, sub_matches).await?,
-        Some(("admin", sub_matches)) => admin::execute(&ctx, sub_matches).await?,
         Some(("keys", sub_matches)) => keys::execute(&ctx, sub_matches).await?,
         Some(("completion", sub_matches)) => {
             let shell = sub_matches.get_one::<String>("shell").unwrap();
@@ -161,8 +159,6 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
         }
         Some(("config", sub_matches)) => config_cmd::execute(sub_matches).await?,
         Some(("text", sub_matches)) => text::execute(&ctx, sub_matches).await?,
-        Some(("graph", sub_matches)) => graph::execute(&ctx, sub_matches).await?,
-        Some(("entity", sub_matches)) => entity::execute(&ctx, sub_matches).await?,
         _ => build_cli().print_help()?,
     }
 

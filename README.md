@@ -51,7 +51,7 @@ Or download a pre-built binary from the [releases page](https://github.com/Daker
 ## Quick Start
 
 ```bash
-# Interactive setup (sets server URL + profile)
+# Interactive setup (sets server URL + API key)
 dk init
 
 # Check server health
@@ -60,7 +60,7 @@ dk health
 # Store a memory for an agent
 dk memory store my-agent "User prefers concise responses" --importance 0.8
 
-# Recall memories by query
+# Recall memories by semantic query
 dk memory recall my-agent "user preferences" --top-k 5
 
 # Full-text BM25 search
@@ -151,7 +151,7 @@ dk health --detailed
 
 ### `dk namespace`
 
-Manage namespaces (vector stores).
+Manage namespaces.
 
 ```bash
 dk namespace list
@@ -163,7 +163,7 @@ dk namespace policy --namespace my-ns
 
 ### `dk memory`
 
-Store, recall, search, and manage agent memories.
+Store, recall, search, and manage agent memories. This is the primary interface to Dakera.
 
 ```bash
 # Store a memory
@@ -172,10 +172,10 @@ dk memory store my-agent "The user likes dark mode" --importance 0.8 --type sema
 # Recall by semantic query
 dk memory recall my-agent "UI preferences" --top-k 10 --type semantic
 
-# Search with advanced filters
+# Search with full-text filters
 dk memory search my-agent "dark mode" --top-k 5
 
-# Get a specific memory
+# Get a specific memory by ID
 dk memory get my-agent mem-abc123
 
 # Update a memory
@@ -191,10 +191,10 @@ dk memory batch-forget my-agent --min-importance 0.3 --max-age-days 90
 # Update importance scores
 dk memory importance my-agent --ids mem-1,mem-2 --value 0.9
 
-# Consolidate similar memories
+# Consolidate similar memories into summaries
 dk memory consolidate my-agent --dry-run
 
-# Submit recall feedback
+# Submit recall quality feedback
 dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
 ```
 
@@ -208,7 +208,7 @@ Full-text (BM25) search across memories.
 # Search all namespaces
 dk text search "machine learning"
 
-# Search within a namespace
+# Search within a specific namespace
 dk text search "temporal reasoning" --namespace my-ns --limit 20
 ```
 
@@ -225,13 +225,13 @@ dk session start my-agent
 # End a session
 dk session end sess-abc123
 
-# List sessions
+# List sessions (optionally filter to active only)
 dk session list --agent-id my-agent --active-only
 
 # Get session details
 dk session get sess-abc123
 
-# List memories for a session
+# List memories stored during a session
 dk session memories sess-abc123
 ```
 
@@ -252,72 +252,20 @@ dk agent sessions my-agent --active-only
 
 ### `dk knowledge`
 
-Knowledge graph management.
+Knowledge graph management and memory summarization.
 
 ```bash
-# Build graph from a specific memory
+# Build a knowledge graph from a specific memory
 dk knowledge graph my-agent --memory-id mem-abc123 --depth 3
 
-# Full graph for an agent
+# Full knowledge graph for an agent
 dk knowledge full-graph my-agent --max-nodes 100
 
-# Summarize memories into a new memory
+# Summarize a set of memories into a new memory
 dk knowledge summarize my-agent --memory-ids m1,m2,m3 --dry-run
 
 # Find and remove duplicate memories
 dk knowledge deduplicate my-agent --threshold 0.9 --dry-run
-```
-
----
-
-### `dk graph`
-
-Graph traversal and export operations.
-
-```bash
-# Export the memory graph
-dk graph export my-agent --format json
-dk graph export my-agent --format dot
-
-# Find shortest path between two memories
-dk graph path my-agent mem-001 mem-099 --max-depth 5
-
-# Traverse from a starting memory
-dk graph traverse my-agent mem-001 --depth 3 --max-nodes 50
-```
-
----
-
-### `dk entity`
-
-Named entity extraction from text.
-
-```bash
-# Extract entities
-dk entity extract my-agent "Alice works at Dakera AI in San Francisco"
-
-# Extract and store as memories
-dk entity extract my-agent "OpenAI released GPT-5" --store
-```
-
----
-
-### `dk vector`
-
-Low-level vector store operations.
-
-```bash
-# Upsert a single vector
-dk vector upsert-one --namespace my-ns --id vec-001 --values 0.1,0.2,0.3
-
-# Delete a vector
-dk vector delete --namespace my-ns --id vec-001
-
-# Export vectors with pagination
-dk vector export --namespace my-ns --limit 1000
-
-# Explain a query execution plan
-dk vector explain --namespace my-ns --values 0.1,0.2,0.3 --top-k 10
 ```
 
 ---
@@ -374,29 +322,9 @@ dk ops compact --namespace my-ns
 
 ---
 
-### `dk admin`
-
-Administrative operations (requires admin key).
-
-```bash
-dk admin cluster-status
-dk admin cluster-nodes
-dk admin cache-stats
-dk admin cache-clear
-dk admin cache-clear --namespace my-ns
-dk admin backup-create
-dk admin backup-list
-dk admin backup-restore backup-id-123
-dk admin index-stats --namespace my-ns
-dk admin optimize --namespace my-ns
-dk admin slow-queries --limit 20
-```
-
----
-
 ### `dk config`
 
-Show or manage server configuration.
+Show or manage server configuration and profiles.
 
 ```bash
 dk config
