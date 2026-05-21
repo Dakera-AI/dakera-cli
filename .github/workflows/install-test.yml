@@ -55,12 +55,9 @@ jobs:
       - name: Verify dk version
         run: dk --version
 
-  # NOTE: cargo install and cargo binstall require dk to be published on crates.io.
-  # These jobs are expected to fail until that happens. Tracked in DAK-5436.
   test-cargo-install:
-    name: cargo install — dk
+    name: cargo install — dakera-cli
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v4
@@ -68,22 +65,21 @@ jobs:
           path: ~/.cargo/registry
           key: cargo-install-${{ runner.os }}-${{ github.run_id }}
           restore-keys: cargo-install-${{ runner.os }}-
-      - name: Install dk from crates.io
-        run: cargo install dk --locked
+      - name: Install dakera-cli from crates.io
+        run: cargo install dakera-cli --locked
       - name: Verify dk version
         run: dk --version
 
   test-cargo-binstall:
-    name: cargo binstall — dk
+    name: cargo binstall — dakera-cli
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Install cargo-binstall
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf \
             https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
             | bash
-      - name: Install dk via binstall
-        run: cargo binstall dk --no-confirm
+      - name: Install dakera-cli via binstall
+        run: cargo binstall dakera-cli --no-confirm
       - name: Verify dk version
         run: dk --version
