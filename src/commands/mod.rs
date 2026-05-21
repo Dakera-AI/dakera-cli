@@ -1,7 +1,7 @@
 //! CLI command implementations
 
+pub mod admin;
 pub mod agent;
-pub mod analytics;
 pub mod completion;
 pub mod config;
 pub mod health;
@@ -11,7 +11,6 @@ pub mod keys;
 pub mod knowledge;
 pub mod memory;
 pub mod namespace;
-pub mod ops;
 pub mod session;
 pub mod text;
 
