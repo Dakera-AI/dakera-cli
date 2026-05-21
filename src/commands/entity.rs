@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result};
 use clap::ArgMatches;
-use dakera_client::reqwest;
 use serde::Serialize;
 
 use crate::context::Context as Ctx;

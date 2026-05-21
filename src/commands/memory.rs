@@ -6,7 +6,7 @@ use dakera_client::memory::{
     ConsolidateRequest, FeedbackRequest, MemoryType, RecallRequest, StoreMemoryRequest,
     UpdateImportanceRequest, UpdateMemoryRequest,
 };
-use dakera_client::{reqwest, DakeraClient};
+use dakera_client::DakeraClient;
 use serde::Serialize;
 
 use crate::context::Context;
