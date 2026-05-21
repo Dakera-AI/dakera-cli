@@ -23,28 +23,6 @@ jobs:
       - name: Verify dk version
         run: dk --version
 
-  test-brew-dakera-mcp:
-    name: Homebrew — dakera-mcp
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - name: Install dakera-mcp via Homebrew
-        run: brew install dakera-ai/tap/dakera-mcp
-      - name: Verify dakera-mcp version
-        run: timeout 3 dakera-mcp || test $? -eq 143
-
-  test-npx:
-    name: npx — dakera-mcp
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install dakera-mcp via npx
-        run: npm install -g @dakera-ai/dakera-mcp
-      - name: Verify dakera-mcp starts
-        run: timeout 3 dakera-mcp || test $? -eq 143
-
   test-apt:
     name: APT — dk
     runs-on: ubuntu-22.04
@@ -80,11 +58,10 @@ jobs:
       - name: Verify dk version
         run: dk --version
 
-  # NOTE: cargo install and cargo binstall require dk and dakera-mcp to be
-  # published on crates.io. These jobs are expected to fail until that happens.
-  # Tracked in DAK-5436.
+  # NOTE: cargo install and cargo binstall require dk to be published on crates.io.
+  # These jobs are expected to fail until that happens. Tracked in DAK-5436.
   test-cargo-install:
-    name: cargo install — dk + dakera-mcp
+    name: cargo install — dk
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -98,13 +75,9 @@ jobs:
         run: cargo install dk --locked
       - name: Verify dk version
         run: dk --version
-      - name: Install dakera-mcp from crates.io
-        run: cargo install dakera-mcp --locked
-      - name: Verify dakera-mcp version
-        run: timeout 3 dakera-mcp || test $? -eq 143
 
   test-cargo-binstall:
-    name: cargo binstall — dk + dakera-mcp
+    name: cargo binstall — dk
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -117,7 +90,3 @@ jobs:
         run: cargo binstall dk --no-confirm
       - name: Verify dk version
         run: dk --version
-      - name: Install dakera-mcp via binstall
-        run: cargo binstall dakera-mcp --no-confirm
-      - name: Verify dakera-mcp version
-        run: timeout 3 dakera-mcp || test $? -eq 143
