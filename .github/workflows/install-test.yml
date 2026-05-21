@@ -10,18 +10,15 @@ on:
     branches: [main]
 
 jobs:
-  # NOTE: Homebrew tap (dakera-ai/homebrew-tap) is private.
-  # brew install requires a public tap. These jobs run with continue-on-error until
-  # the tap is made public (requires founder approval per org security policy).
   test-brew-dk:
     name: Homebrew — dk
     runs-on: macos-latest
-    continue-on-error: true
     steps:
       - name: Install dk via Homebrew
         run: brew install dakera-ai/tap/dk
       - name: Verify dk version
         run: dk --version
+
 
   test-apt:
     name: APT — dk
