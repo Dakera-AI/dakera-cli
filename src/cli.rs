@@ -1276,10 +1276,7 @@ mod tests {
     #[test]
     fn default_url_is_localhost_3000() {
         let m = build_cli().try_get_matches_from(["dk"]).unwrap();
-        assert_eq!(
-            m.get_one::<String>("url").unwrap(),
-            "http://localhost:3000"
-        );
+        assert_eq!(m.get_one::<String>("url").unwrap(), "http://localhost:3000");
     }
 
     #[test]
@@ -1287,10 +1284,7 @@ mod tests {
         let m = build_cli()
             .try_get_matches_from(["dk", "--url", "http://myserver:8080"])
             .unwrap();
-        assert_eq!(
-            m.get_one::<String>("url").unwrap(),
-            "http://myserver:8080"
-        );
+        assert_eq!(m.get_one::<String>("url").unwrap(), "http://myserver:8080");
     }
 
     #[test]
@@ -1337,17 +1331,13 @@ mod tests {
 
     #[test]
     fn health_subcommand_is_recognized() {
-        let m = build_cli()
-            .try_get_matches_from(["dk", "health"])
-            .unwrap();
+        let m = build_cli().try_get_matches_from(["dk", "health"]).unwrap();
         assert_eq!(m.subcommand_name(), Some("health"));
     }
 
     #[test]
     fn health_detailed_flag_defaults_false() {
-        let m = build_cli()
-            .try_get_matches_from(["dk", "health"])
-            .unwrap();
+        let m = build_cli().try_get_matches_from(["dk", "health"]).unwrap();
         let (_, sub) = m.subcommand().unwrap();
         assert!(!sub.get_flag("detailed"));
     }

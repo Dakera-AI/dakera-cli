@@ -104,10 +104,7 @@ mod tests {
 
     #[test]
     fn output_format_unknown_defaults_to_table() {
-        assert!(matches!(
-            OutputFormat::from("unknown"),
-            OutputFormat::Table
-        ));
+        assert!(matches!(OutputFormat::from("unknown"), OutputFormat::Table));
     }
 
     #[test]
@@ -118,7 +115,10 @@ mod tests {
     #[test]
     fn output_format_case_insensitive() {
         assert!(matches!(OutputFormat::from("JSON"), OutputFormat::Json));
-        assert!(matches!(OutputFormat::from("COMPACT"), OutputFormat::Compact));
+        assert!(matches!(
+            OutputFormat::from("COMPACT"),
+            OutputFormat::Compact
+        ));
     }
 }
 
