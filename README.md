@@ -1,12 +1,8 @@
-[![Docs](https://img.shields.io/badge/docs-dakera.ai-D4A843)](https://dakera.ai/docs)
 # ⚡ dakera-cli
 
-[![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE)
-[![dakera.ai](https://img.shields.io/badge/dakera.ai-website-22c55e?style=flat-square)](https://dakera.ai) [![Docs](https://img.shields.io/badge/docs-dakera.ai%2Fdocs-3b82f6?style=flat-square)](https://dakera.ai/docs)
+[![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE) [![Docs](https://img.shields.io/badge/docs-dakera.ai%2Fdocs-3b82f6?style=flat-square)](https://dakera.ai/docs) [![dakera.ai](https://img.shields.io/badge/dakera.ai-website-22c55e?style=flat-square)](https://dakera.ai)
 
-Command-line interface for Dakera AI — inspect and manage a Dakera instance from the terminal.
-
-Part of [Dakera AI](https://dakera.ai) — the memory engine for AI agents.
+Command-line interface for [Dakera AI](https://dakera.ai) — inspect and manage a Dakera memory instance from the terminal.
 
 > The Dakera memory engine scores **87.6% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
 
@@ -51,23 +47,20 @@ Or download a pre-built binary from the [releases page](https://github.com/Daker
 ## Quick Start
 
 ```bash
-# Interactive setup (sets server URL + API key)
+# 1. Configure the CLI (server URL + API key)
 dk init
 
-# Check server health
+# 2. Verify connectivity
 dk health
 
-# Store a memory for an agent
-dk memory store my-agent "User prefers concise responses" --importance 0.8
+# 3. Store your first memory
+dk memory store my-agent "The user prefers concise responses" --importance 0.8
 
-# Recall memories by semantic query
+# 4. Recall by semantic query
 dk memory recall my-agent "user preferences" --top-k 5
 
-# Full-text BM25 search
-dk text search "user preferences" --namespace default
-
-# List namespaces
-dk namespace list
+# 5. Full-text BM25 search
+dk text search "user preferences"
 ```
 
 ---
@@ -98,14 +91,9 @@ namespace = "default"
 ### Named profiles
 
 ```bash
-# Add a profile
 dk config profile add staging --url http://staging:3000 --key dk-staging-key
-
-# Use a profile for one command
-dk --profile staging namespace list
-
-# Set a profile as active
 dk config profile use staging
+dk --profile staging namespace list
 ```
 
 ### Precedence
@@ -124,13 +112,8 @@ Environment variables > CLI flags > config file > defaults.
 | `--profile` | `-p` | — | Named server profile |
 
 ```bash
-# Machine-readable JSON output
 dk --format json memory recall my-agent "recent tasks"
-
-# Compact single-line JSON (for piping/scripting)
 dk --format compact namespace list | jq '.[].name'
-
-# Show HTTP request/response timing
 dk --verbose memory store my-agent "new memory"
 ```
 
@@ -170,9 +153,9 @@ Store, recall, search, and manage agent memories. This is the primary interface 
 dk memory store my-agent "The user likes dark mode" --importance 0.8 --type semantic
 
 # Recall by semantic query
-dk memory recall my-agent "UI preferences" --top-k 10 --type semantic
+dk memory recall my-agent "UI preferences" --top-k 10
 
-# Search with full-text filters
+# Full-text search within an agent's memories
 dk memory search my-agent "dark mode" --top-k 5
 
 # Get a specific memory by ID
@@ -219,19 +202,10 @@ dk text search "temporal reasoning" --namespace my-ns --limit 20
 Manage agent sessions.
 
 ```bash
-# Start a session
 dk session start my-agent
-
-# End a session
 dk session end sess-abc123
-
-# List sessions (optionally filter to active only)
 dk session list --agent-id my-agent --active-only
-
-# Get session details
 dk session get sess-abc123
-
-# List memories stored during a session
 dk session memories sess-abc123
 ```
 
@@ -255,7 +229,7 @@ dk agent sessions my-agent --active-only
 Knowledge graph management and memory summarization.
 
 ```bash
-# Build a knowledge graph from a specific memory
+# Build a knowledge graph from a memory
 dk knowledge graph my-agent --memory-id mem-abc123 --depth 3
 
 # Full knowledge graph for an agent
@@ -296,35 +270,42 @@ dk keys usage key-abc123
 
 ---
 
-### `dk analytics`
+### `dk admin`
 
-Platform analytics and metrics.
-
-```bash
-dk analytics overview --period 24h
-dk analytics latency --period 7d
-dk analytics throughput --period 1h
-dk analytics storage
-```
-
----
-
-### `dk ops`
-
-Operations and maintenance.
+Cluster administration, caching, backups, and server configuration.
 
 ```bash
-dk ops stats
-dk ops diagnostics
-dk ops jobs
-dk ops compact --namespace my-ns
+# Cluster overview
+dk admin cluster-status
+dk admin cluster-nodes
+
+# Namespace index management
+dk admin optimize my-ns
+dk admin index-stats my-ns
+dk admin rebuild-indexes my-ns
+
+# Cache management
+dk admin cache-stats
+dk admin cache-clear
+dk admin cache-clear --namespace my-ns
+
+# Server configuration
+dk admin config-get
+dk admin config-set --key max_connections --value 100
+
+# Namespace quotas
+dk admin quotas-get
+dk admin quotas-set --data '{"max_memories": 10000}'
+
+# Performance diagnostics
+dk admin slow-queries --limit 10
 ```
 
 ---
 
 ### `dk config`
 
-Show or manage server configuration and profiles.
+Show or manage connection profiles.
 
 ```bash
 dk config
@@ -337,19 +318,12 @@ dk config profile list
 
 ### `dk completion`
 
-Shell completion scripts.
+Generate shell completion scripts.
 
 ```bash
-# Bash
 dk completion bash --install
-
-# Zsh
 dk completion zsh --install
-
-# Fish
 dk completion fish --install
-
-# PowerShell
 dk completion powershell
 ```
 
