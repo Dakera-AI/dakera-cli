@@ -1117,6 +1117,128 @@ fn keys_delete_success_reports_deletion() {
 }
 
 // ---------------------------------------------------------------------------
+// Error response tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn health_server_returns_500_exits_with_code_6() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/health");
+        then.status(500)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "internal server error" }));
+    });
+
+    dk().args(["--url", &server.base_url(), "health"])
+        .assert()
+        .failure()
+        .code(6);
+}
+
+#[test]
+fn health_server_returns_401_exits_with_code_4() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/health");
+        then.status(401)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "unauthorized" }));
+    });
+
+    dk().args(["--url", &server.base_url(), "health"])
+        .assert()
+        .failure()
+        .code(4);
+}
+
+#[test]
+fn memory_store_returns_401_exits_with_code_4() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/store");
+        then.status(401)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "unauthorized" }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "store",
+        "test-agent",
+        "test content",
+    ])
+    .assert()
+    .failure()
+    .code(4);
+}
+
+#[test]
+fn memory_recall_returns_500_exits_with_code_6() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/recall");
+        then.status(500)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "internal server error" }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "recall",
+        "test-agent",
+        "query text",
+    ])
+    .assert()
+    .failure()
+    .code(6);
+}
+
+#[test]
+fn namespace_list_returns_401_exits_with_code_4() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/v1/namespaces");
+        then.status(401)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "unauthorized" }));
+    });
+
+    dk().args(["--url", &server.base_url(), "namespace", "list"])
+        .assert()
+        .failure()
+        .code(4);
+}
+
+#[test]
+fn connection_refused_exits_with_code_2() {
+    dk().args(["--url", "http://127.0.0.1:1", "health"])
+        .assert()
+        .failure()
+        .code(2);
+}
+
+#[test]
+fn health_json_format_error_outputs_json_with_error_true() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/health");
+        then.status(500)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "error": "internal server error" }));
+    });
+
+    dk().args(["--url", &server.base_url(), "--format", "json", "health"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("SERVER_ERROR"));
+}
+
+// ---------------------------------------------------------------------------
 // Container integration tests
 // These require a running dakera server. Run with:
 //   cargo test --test integration -- --ignored

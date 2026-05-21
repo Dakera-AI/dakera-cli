@@ -1268,3 +1268,87 @@ pub fn build_analytics_command() -> Command {
             ),
         )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_url_is_localhost_3000() {
+        let m = build_cli().try_get_matches_from(["dk"]).unwrap();
+        assert_eq!(
+            m.get_one::<String>("url").unwrap(),
+            "http://localhost:3000"
+        );
+    }
+
+    #[test]
+    fn url_flag_overrides_default() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "--url", "http://myserver:8080"])
+            .unwrap();
+        assert_eq!(
+            m.get_one::<String>("url").unwrap(),
+            "http://myserver:8080"
+        );
+    }
+
+    #[test]
+    fn verbose_flag_is_false_by_default() {
+        let m = build_cli().try_get_matches_from(["dk"]).unwrap();
+        assert!(!m.get_flag("verbose"));
+    }
+
+    #[test]
+    fn verbose_flag_is_true_when_set() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "--verbose"])
+            .unwrap();
+        assert!(m.get_flag("verbose"));
+    }
+
+    #[test]
+    fn short_verbose_flag_works() {
+        let m = build_cli().try_get_matches_from(["dk", "-v"]).unwrap();
+        assert!(m.get_flag("verbose"));
+    }
+
+    #[test]
+    fn format_defaults_to_table() {
+        let m = build_cli().try_get_matches_from(["dk"]).unwrap();
+        assert_eq!(m.get_one::<String>("format").unwrap(), "table");
+    }
+
+    #[test]
+    fn format_json_is_accepted() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "--format", "json"])
+            .unwrap();
+        assert_eq!(m.get_one::<String>("format").unwrap(), "json");
+    }
+
+    #[test]
+    fn format_compact_is_accepted() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "--format", "compact"])
+            .unwrap();
+        assert_eq!(m.get_one::<String>("format").unwrap(), "compact");
+    }
+
+    #[test]
+    fn health_subcommand_is_recognized() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "health"])
+            .unwrap();
+        assert_eq!(m.subcommand_name(), Some("health"));
+    }
+
+    #[test]
+    fn health_detailed_flag_defaults_false() {
+        let m = build_cli()
+            .try_get_matches_from(["dk", "health"])
+            .unwrap();
+        let (_, sub) = m.subcommand().unwrap();
+        assert!(!sub.get_flag("detailed"));
+    }
+}

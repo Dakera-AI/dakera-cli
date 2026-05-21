@@ -80,6 +80,48 @@ async fn main() {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_format_from_json() {
+        assert!(matches!(OutputFormat::from("json"), OutputFormat::Json));
+    }
+
+    #[test]
+    fn output_format_from_compact() {
+        assert!(matches!(
+            OutputFormat::from("compact"),
+            OutputFormat::Compact
+        ));
+    }
+
+    #[test]
+    fn output_format_from_table() {
+        assert!(matches!(OutputFormat::from("table"), OutputFormat::Table));
+    }
+
+    #[test]
+    fn output_format_unknown_defaults_to_table() {
+        assert!(matches!(
+            OutputFormat::from("unknown"),
+            OutputFormat::Table
+        ));
+    }
+
+    #[test]
+    fn output_format_default_is_table() {
+        assert!(matches!(OutputFormat::default(), OutputFormat::Table));
+    }
+
+    #[test]
+    fn output_format_case_insensitive() {
+        assert!(matches!(OutputFormat::from("JSON"), OutputFormat::Json));
+        assert!(matches!(OutputFormat::from("COMPACT"), OutputFormat::Compact));
+    }
+}
+
 async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> anyhow::Result<()> {
     let config = match matches.get_one::<String>("profile") {
         Some(p) => Config::load_with_profile(p),
