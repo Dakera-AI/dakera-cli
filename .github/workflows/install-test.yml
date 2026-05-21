@@ -1,0 +1,111 @@
+name: Install Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  test-brew-dk:
+    name: Homebrew — dk
+    runs-on: macos-latest
+    steps:
+      - name: Install dk via Homebrew
+        run: brew install dakera-ai/tap/dk
+      - name: Verify dk version
+        run: dk --version
+
+  test-brew-dakera-mcp:
+    name: Homebrew — dakera-mcp
+    runs-on: macos-latest
+    steps:
+      - name: Install dakera-mcp via Homebrew
+        run: brew install dakera-ai/tap/dakera-mcp
+      - name: Verify dakera-mcp version
+        run: dakera-mcp --version
+
+  test-npx:
+    name: npx — dakera-mcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run dakera-mcp via npx
+        run: npx --yes @dakera-ai/dakera-mcp --version
+
+  test-apt:
+    name: APT — dk
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Add Dakera APT repository
+        run: |
+          curl -fsSL https://dakera-ai.github.io/apt-repo/KEY.gpg \
+            | sudo gpg --dearmor -o /usr/share/keyrings/dakera-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/dakera-archive-keyring.gpg] https://dakera-ai.github.io/apt-repo stable main" \
+            | sudo tee /etc/apt/sources.list.d/dakera.list
+          sudo apt-get update
+      - name: Install dk via apt
+        run: sudo apt-get install -y dk
+      - name: Verify dk version
+        run: dk --version
+
+  test-yum:
+    name: YUM/DNF — dk
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Add Dakera RPM repository
+        run: |
+          cat > /etc/yum.repos.d/dakera.repo << 'EOF'
+          [dakera]
+          name=Dakera AI
+          baseurl=https://dakera-ai.github.io/rpm-repo/
+          enabled=1
+          gpgcheck=0
+          EOF
+      - name: Install dk via dnf
+        run: dnf install -y dk
+      - name: Verify dk version
+        run: dk --version
+
+  test-cargo-install:
+    name: cargo install — dk + dakera-mcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: cargo-install-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: cargo-install-${{ runner.os }}-
+      - name: Install dk from crates.io
+        run: cargo install dk --locked
+      - name: Verify dk version
+        run: dk --version
+      - name: Install dakera-mcp from crates.io
+        run: cargo install dakera-mcp --locked
+      - name: Verify dakera-mcp version
+        run: dakera-mcp --version
+
+  test-cargo-binstall:
+    name: cargo binstall — dk + dakera-mcp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install cargo-binstall
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+            | bash
+      - name: Install dk via binstall
+        run: cargo binstall dk --no-confirm
+      - name: Verify dk version
+        run: dk --version
+      - name: Install dakera-mcp via binstall
+        run: cargo binstall dakera-mcp --no-confirm
+      - name: Verify dakera-mcp version
+        run: dakera-mcp --version
