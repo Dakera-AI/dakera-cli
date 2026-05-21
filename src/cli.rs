@@ -71,6 +71,9 @@ pub fn build_cli() -> Command {
         .subcommand(build_keys_command())
         .subcommand(build_config_command())
         .subcommand(build_completion_command())
+        .subcommand(build_text_command())
+        .subcommand(build_graph_command())
+        .subcommand(build_entity_command())
 }
 
 pub fn build_config_command() -> Command {
@@ -802,6 +805,36 @@ pub fn build_memory_command() -> Command {
                         .help("Relevance score (0.0 to 1.0)"),
                 ),
         )
+        .subcommand(
+            Command::new("batch-forget")
+                .about("Batch delete memories matching filters")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(
+                    Arg::new("type")
+                        .short('t')
+                        .long("type")
+                        .value_parser(["episodic", "semantic", "procedural", "working"])
+                        .help("Delete memories of this type"),
+                )
+                .arg(
+                    Arg::new("min-importance")
+                        .long("min-importance")
+                        .value_parser(value_parser!(f32))
+                        .help("Delete memories with importance below this value"),
+                )
+                .arg(
+                    Arg::new("max-age-days")
+                        .long("max-age-days")
+                        .value_parser(value_parser!(u32))
+                        .help("Delete memories older than this many days"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Preview deletions without removing any memories"),
+                ),
+        )
 }
 
 pub fn build_session_command() -> Command {
@@ -1266,6 +1299,103 @@ pub fn build_analytics_command() -> Command {
                     .long("namespace")
                     .help("Filter by namespace"),
             ),
+        )
+}
+
+pub fn build_text_command() -> Command {
+    Command::new("text")
+        .about("Full-text (BM25) search across memories")
+        .subcommand(
+            Command::new("search")
+                .about("BM25 full-text search")
+                .arg(Arg::new("query").required(true).help("Search query"))
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .help("Namespace to search in"),
+                )
+                .arg(
+                    Arg::new("limit")
+                        .short('l')
+                        .long("limit")
+                        .default_value("10")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum number of results"),
+                ),
+        )
+}
+
+pub fn build_graph_command() -> Command {
+    Command::new("graph")
+        .about("Graph traversal and export operations")
+        .subcommand(
+            Command::new("export")
+                .about("Export the memory graph for an agent")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(
+                    Arg::new("fmt")
+                        .long("format")
+                        .default_value("json")
+                        .value_parser(["json", "dot", "graphml"])
+                        .help("Export format"),
+                ),
+        )
+        .subcommand(
+            Command::new("path")
+                .about("Find shortest path between two memories")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(Arg::new("from_id").required(true).help("Source memory ID"))
+                .arg(Arg::new("to_id").required(true).help("Target memory ID"))
+                .arg(
+                    Arg::new("max-depth")
+                        .long("max-depth")
+                        .default_value("6")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum path depth"),
+                ),
+        )
+        .subcommand(
+            Command::new("traverse")
+                .about("Traverse the memory graph from a starting node")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(
+                    Arg::new("start_id")
+                        .required(true)
+                        .help("Starting memory ID"),
+                )
+                .arg(
+                    Arg::new("depth")
+                        .short('d')
+                        .long("depth")
+                        .default_value("3")
+                        .value_parser(value_parser!(u32))
+                        .help("Traversal depth"),
+                )
+                .arg(
+                    Arg::new("max-nodes")
+                        .long("max-nodes")
+                        .default_value("50")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum nodes to return"),
+                ),
+        )
+}
+
+pub fn build_entity_command() -> Command {
+    Command::new("entity")
+        .about("Entity extraction from text")
+        .subcommand(
+            Command::new("extract")
+                .about("Extract named entities from text")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(Arg::new("text").required(true).help("Text to extract entities from"))
+                .arg(
+                    Arg::new("store")
+                        .long("store")
+                        .action(ArgAction::SetTrue)
+                        .help("Store extracted entities as memories"),
+                ),
         )
 }
 

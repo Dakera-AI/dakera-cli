@@ -6,7 +6,7 @@ use dakera_client::memory::{
     ConsolidateRequest, FeedbackRequest, MemoryType, RecallRequest, StoreMemoryRequest,
     UpdateImportanceRequest, UpdateMemoryRequest,
 };
-use dakera_client::DakeraClient;
+use dakera_client::{reqwest, DakeraClient};
 use serde::Serialize;
 
 use crate::context::Context;
@@ -306,6 +306,62 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             output::success(&format!("Feedback submitted (status: {})", response.status));
             if let Some(importance) = response.updated_importance {
                 output::info(&format!("Updated importance: {}", importance));
+            }
+        }
+
+        Some(("batch-forget", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let memory_type = sub_matches.get_one::<String>("type").cloned();
+            let min_importance = sub_matches.get_one::<f32>("min-importance").copied();
+            let max_age_days = sub_matches.get_one::<u32>("max-age-days").copied();
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            let mut filters = serde_json::json!({});
+            if let Some(ref mt) = memory_type {
+                filters["memory_type"] = serde_json::Value::String(mt.clone());
+            }
+            if let Some(mi) = min_importance {
+                filters["min_importance"] = serde_json::json!(mi);
+            }
+            if let Some(age) = max_age_days {
+                filters["max_age_days"] = serde_json::json!(age);
+            }
+            if dry_run {
+                filters["dry_run"] = serde_json::Value::Bool(true);
+            }
+
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "filters": filters
+            });
+
+            let path = "/v1/memories/forget/batch";
+            let t = ctx.log_request("POST", path);
+            let http_client = reqwest::Client::new();
+            let resp = http_client
+                .post(format!("{}{}", ctx.url, path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to POST {}: {}", path, e))?;
+            let status = resp.status();
+            let text = resp.text().await?;
+            ctx.log_response(t, &status.to_string());
+            if !status.is_success() {
+                anyhow::bail!("Request failed ({}): {}", status, text);
+            }
+
+            let data: serde_json::Value = serde_json::from_str(&text)
+                .unwrap_or(serde_json::json!({ "deleted_count": 0 }));
+            let count = data
+                .get("deleted_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            if dry_run {
+                output::info(&format!("[dry-run] Would delete {} memories", count));
+            } else {
+                output::success(&format!("Deleted {} memories", count));
             }
         }
 

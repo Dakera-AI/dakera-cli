@@ -1438,3 +1438,621 @@ fn container_vector_operations() {
         .success()
         .stdout(predicate::str::contains("integration-vec-001"));
 }
+
+// ---------------------------------------------------------------------------
+// Container — memory extended operations
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_memory_search() {
+    let url = container_url();
+    let key = container_key();
+
+    // First store a memory to search for
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "store",
+            "search-test-agent",
+            "BM25 full-text search integration test memory",
+            "--importance",
+            "0.6",
+        ])
+        .assert()
+        .success();
+
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "search",
+            "search-test-agent",
+            "full-text search",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_memory_consolidate() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "consolidate",
+            "consolidate-test-agent",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_memory_batch_forget_dry_run() {
+    let url = container_url();
+    let key = container_key();
+
+    // Store a low-importance memory then batch-forget it (dry-run)
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "store",
+            "batch-forget-agent",
+            "temporary low-importance memory",
+            "--importance",
+            "0.1",
+        ])
+        .assert()
+        .success();
+
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "batch-forget",
+            "batch-forget-agent",
+            "--min-importance",
+            "0.5",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("dry-run"));
+}
+
+// ---------------------------------------------------------------------------
+// Container — knowledge graph operations
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_knowledge_full_graph() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["knowledge", "full-graph", "integration-agent"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_knowledge_summarize_dry_run() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "knowledge",
+            "summarize",
+            "integration-agent",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_knowledge_deduplicate_dry_run() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "knowledge",
+            "deduplicate",
+            "integration-agent",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — analytics
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_analytics_overview() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["analytics", "overview"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_analytics_latency() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["analytics", "latency", "--period", "1h"])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — ops / admin
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_ops_stats() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["ops", "stats"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_ops_diagnostics() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["ops", "diagnostics"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_ops_compact_dry_run() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "ops",
+            "compact",
+            "--namespace",
+            "integration-test-ns",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_admin_cluster_status() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["admin", "cluster-status"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_admin_cache_stats() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["admin", "cache-stats"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_admin_backup_list() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["admin", "backup-list"])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — index management
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_index_stats() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["index", "stats", "--namespace", "integration-test-ns"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_index_fulltext_stats() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "index",
+            "fulltext-stats",
+            "--namespace",
+            "integration-test-ns",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_index_rebuild_dry_run() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "index",
+            "rebuild",
+            "--namespace",
+            "integration-test-ns",
+            "--dry-run",
+        ])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — session extended
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_session_list() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["session", "list"])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — config
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_config_show() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["config"])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — new commands: text, graph, entity
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_text_search() {
+    let url = container_url();
+    let key = container_key();
+
+    // Store a memory first so there's something to search
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "store",
+            "text-search-agent",
+            "Dakera BM25 fulltext search test content",
+            "--importance",
+            "0.7",
+        ])
+        .assert()
+        .success();
+
+    container_dk(&url, &key)
+        .args(["text", "search", "fulltext search"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_graph_export() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["graph", "export", "integration-agent"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_entity_extract() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args([
+            "entity",
+            "extract",
+            "entity-test-agent",
+            "Alice works at Dakera AI in San Francisco",
+        ])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Container — error path tests
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_memory_recall_empty_agent_returns_empty() {
+    let url = container_url();
+    let key = container_key();
+
+    // Recalling from an agent with no memories should succeed (empty result)
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "recall",
+            "nonexistent-agent-xyz-00001",
+            "query",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_keys_list() {
+    let url = container_url();
+    let key = container_key();
+
+    container_dk(&url, &key)
+        .args(["keys", "list"])
+        .assert()
+        .success();
+}
+
+// ---------------------------------------------------------------------------
+// Httpmock tests for new commands
+// ---------------------------------------------------------------------------
+
+#[test]
+fn text_search_returns_results() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/fulltext/search");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "results": [
+                    {
+                        "id": "mem-001",
+                        "score": 0.95,
+                        "content": "BM25 search result content",
+                        "namespace": "default"
+                    }
+                ],
+                "total": 1
+            }));
+    });
+
+    dk().args(["--url", &server.base_url(), "text", "search", "my query"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 result"));
+}
+
+#[test]
+fn text_search_empty_results_shows_no_results_message() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/fulltext/search");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "results": [], "total": 0 }));
+    });
+
+    dk().args(["--url", &server.base_url(), "text", "search", "no match"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No results found"));
+}
+
+#[test]
+fn memory_batch_forget_returns_deleted_count() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memories/forget/batch");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "deleted_count": 5 }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-forget",
+        "test-agent",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Deleted 5"));
+}
+
+#[test]
+fn memory_batch_forget_dry_run_shows_preview() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memories/forget/batch");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "deleted_count": 3 }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-forget",
+        "test-agent",
+        "--dry-run",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("dry-run"));
+}
+
+#[test]
+fn graph_export_returns_success() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/graph/export");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "nodes": [],
+                "edges": [],
+                "format": "json"
+            }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "graph",
+        "export",
+        "test-agent",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("exported"));
+}
+
+#[test]
+fn graph_traverse_returns_nodes() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/graph/traverse");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "nodes": [
+                    {"id": "mem-001", "content": "start node", "depth": 0},
+                    {"id": "mem-002", "content": "connected node", "depth": 1}
+                ],
+                "edges": [
+                    {"source": "mem-001", "target": "mem-002", "similarity": 0.9}
+                ]
+            }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "graph",
+        "traverse",
+        "test-agent",
+        "mem-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("2 nodes"));
+}
+
+#[test]
+fn entity_extract_returns_entities() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/entities/extract");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "entities": [
+                    {"entity": "Alice", "type": "PERSON", "confidence": 0.99},
+                    {"entity": "Dakera", "type": "ORG", "confidence": 0.95}
+                ]
+            }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "entity",
+        "extract",
+        "test-agent",
+        "Alice works at Dakera",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("2 entity"));
+}
+
+#[test]
+fn entity_extract_no_entities_shows_message() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/entities/extract");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({ "entities": [] }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "entity",
+        "extract",
+        "test-agent",
+        "no entities here",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("No entities found"));
+}

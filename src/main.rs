@@ -12,8 +12,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::cli::build_cli;
 use crate::commands::{
-    admin, agent, analytics, completion, config as config_cmd, health, index, init, keys,
-    knowledge, memory, namespace, ops, session, vector,
+    admin, agent, analytics, completion, config as config_cmd, entity, graph, health, index, init,
+    keys, knowledge, memory, namespace, ops, session, text, vector,
 };
 use crate::config::Config;
 use crate::context::Context;
@@ -160,6 +160,9 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
             completion::execute(shell, install)?;
         }
         Some(("config", sub_matches)) => config_cmd::execute(sub_matches).await?,
+        Some(("text", sub_matches)) => text::execute(&ctx, sub_matches).await?,
+        Some(("graph", sub_matches)) => graph::execute(&ctx, sub_matches).await?,
+        Some(("entity", sub_matches)) => entity::execute(&ctx, sub_matches).await?,
         _ => build_cli().print_help()?,
     }
 

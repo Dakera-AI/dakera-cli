@@ -1,11 +1,8 @@
 [![Docs](https://img.shields.io/badge/docs-dakera.ai-D4A843)](https://dakera.ai/docs)
 # ⚡ dakera-cli
 
-
-
 [![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE)
 [![dakera.ai](https://img.shields.io/badge/dakera.ai-website-22c55e?style=flat-square)](https://dakera.ai) [![Docs](https://img.shields.io/badge/docs-dakera.ai%2Fdocs-3b82f6?style=flat-square)](https://dakera.ai/docs)
-[![Docs](https://img.shields.io/badge/docs-dakera.ai-D4A843)](https://dakera.ai/docs)
 
 Command-line interface for Dakera AI — inspect and manage a Dakera instance from the terminal.
 
@@ -47,71 +44,388 @@ Full deployment guide (Docker Compose, Kubernetes, Helm): [dakera-deploy](https:
 cargo install dakera-cli
 ```
 
+Or download a pre-built binary from the [releases page](https://github.com/Dakera-AI/dakera-cli/releases).
+
+---
+
 ## Quick Start
 
 ```bash
-# Connect to a Dakera instance
+# Interactive setup (sets server URL + profile)
 dk init
-
-# Store a memory
-dk memory store my-agent "User prefers concise responses" --importance 0.8
-
-# Recall memories
-dk memory recall my-agent "user preferences" --top-k 5
-
-# List namespaces
-dk namespace list
 
 # Check server health
 dk health
+
+# Store a memory for an agent
+dk memory store my-agent "User prefers concise responses" --importance 0.8
+
+# Recall memories by query
+dk memory recall my-agent "user preferences" --top-k 5
+
+# Full-text BM25 search
+dk text search "user preferences" --namespace default
+
+# List namespaces
+dk namespace list
 ```
 
-## Connect to Dakera
+---
+
+## Configuration
+
+### Environment variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `DAKERA_URL` | Server base URL | `http://localhost:3000` |
+| `DAKERA_API_KEY` | API key for authentication | — |
+| `DAKERA_PROFILE` | Named profile to use | active profile in config |
+
+### Config file
+
+`dk init` creates `~/.dakera/config.toml`:
+
+```toml
+[server]
+url = "http://localhost:3000"
+api_key = "dk-mykey"
+
+[defaults]
+namespace = "default"
+```
+
+### Named profiles
 
 ```bash
-# Set env vars (or use dk init for interactive setup)
-export DAKERA_URL=http://your-server:3000
-export DAKERA_API_KEY=your-key
+# Add a profile
+dk config profile add staging --url http://staging:3000 --key dk-staging-key
+
+# Use a profile for one command
+dk --profile staging namespace list
+
+# Set a profile as active
+dk config profile use staging
 ```
+
+### Precedence
+
+Environment variables > CLI flags > config file > defaults.
+
+---
 
 ## Global Flags
 
 | Flag | Short | Default | Description |
 |---|---|---|---|
-| `--url` | `-u` | `http://localhost:3000` | Server URL (overrides config/env) |
+| `--url` | `-u` | `http://localhost:3000` | Server URL |
 | `--format` | `-f` | `table` | Output format: `table`, `json`, `compact` |
-| `--verbose` | `-v` | false | Log HTTP requests and responses |
-| `--profile` | `-p` | — | Named server profile from config |
+| `--verbose` | `-v` | false | Log HTTP requests and response timing |
+| `--profile` | `-p` | — | Named server profile |
 
 ```bash
 # Machine-readable JSON output
 dk --format json memory recall my-agent "recent tasks"
 
-# Verbose mode — shows HTTP request/response timing
-dk --verbose health
+# Compact single-line JSON (for piping/scripting)
+dk --format compact namespace list | jq '.[].name'
 
-# Use a named profile
-dk --profile staging namespace list
+# Show HTTP request/response timing
+dk --verbose memory store my-agent "new memory"
 ```
+
+---
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `dk health` | Check server health and connectivity |
-| `dk init` | Interactive setup wizard |
-| `dk namespace list\|policy` | Manage namespaces |
-| `dk memory store\|recall\|get\|forget\|update\|importance\|consolidate\|feedback` | Agent memory operations |
-| `dk session start\|end\|list\|memories` | Session lifecycle management |
-| `dk agent list\|stats\|memories\|sessions` | Agent management |
-| `dk vector upsert-one\|delete` | Vector store operations |
-| `dk knowledge graph\|deduplicate` | Knowledge graph management |
-| `dk keys list\|create\|delete\|usage` | API key management |
-| `dk analytics overview\|latency\|throughput\|storage` | Platform analytics |
-| `dk admin stats\|purge` | Admin operations |
-| `dk ops metrics` | Operational metrics |
-| `dk config` | Show or manage server profiles |
-| `dk completion bash\|zsh\|fish\|powershell` | Shell completion |
+### `dk health`
+
+Check server health and connectivity.
+
+```bash
+dk health
+dk health --detailed
+```
+
+---
+
+### `dk namespace`
+
+Manage namespaces (vector stores).
+
+```bash
+dk namespace list
+dk namespace create my-ns
+dk namespace policy --namespace my-ns
+```
+
+---
+
+### `dk memory`
+
+Store, recall, search, and manage agent memories.
+
+```bash
+# Store a memory
+dk memory store my-agent "The user likes dark mode" --importance 0.8 --type semantic
+
+# Recall by semantic query
+dk memory recall my-agent "UI preferences" --top-k 10 --type semantic
+
+# Search with advanced filters
+dk memory search my-agent "dark mode" --top-k 5
+
+# Get a specific memory
+dk memory get my-agent mem-abc123
+
+# Update a memory
+dk memory update my-agent mem-abc123 --content "Updated content"
+
+# Delete a single memory
+dk memory forget my-agent mem-abc123
+
+# Batch delete by filters (dry-run first!)
+dk memory batch-forget my-agent --min-importance 0.3 --dry-run
+dk memory batch-forget my-agent --min-importance 0.3 --max-age-days 90
+
+# Update importance scores
+dk memory importance my-agent --ids mem-1,mem-2 --value 0.9
+
+# Consolidate similar memories
+dk memory consolidate my-agent --dry-run
+
+# Submit recall feedback
+dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
+```
+
+---
+
+### `dk text`
+
+Full-text (BM25) search across memories.
+
+```bash
+# Search all namespaces
+dk text search "machine learning"
+
+# Search within a namespace
+dk text search "temporal reasoning" --namespace my-ns --limit 20
+```
+
+---
+
+### `dk session`
+
+Manage agent sessions.
+
+```bash
+# Start a session
+dk session start my-agent
+
+# End a session
+dk session end sess-abc123
+
+# List sessions
+dk session list --agent-id my-agent --active-only
+
+# Get session details
+dk session get sess-abc123
+
+# List memories for a session
+dk session memories sess-abc123
+```
+
+---
+
+### `dk agent`
+
+View and manage agents.
+
+```bash
+dk agent list
+dk agent stats my-agent
+dk agent memories my-agent --type episodic --limit 20
+dk agent sessions my-agent --active-only
+```
+
+---
+
+### `dk knowledge`
+
+Knowledge graph management.
+
+```bash
+# Build graph from a specific memory
+dk knowledge graph my-agent --memory-id mem-abc123 --depth 3
+
+# Full graph for an agent
+dk knowledge full-graph my-agent --max-nodes 100
+
+# Summarize memories into a new memory
+dk knowledge summarize my-agent --memory-ids m1,m2,m3 --dry-run
+
+# Find and remove duplicate memories
+dk knowledge deduplicate my-agent --threshold 0.9 --dry-run
+```
+
+---
+
+### `dk graph`
+
+Graph traversal and export operations.
+
+```bash
+# Export the memory graph
+dk graph export my-agent --format json
+dk graph export my-agent --format dot
+
+# Find shortest path between two memories
+dk graph path my-agent mem-001 mem-099 --max-depth 5
+
+# Traverse from a starting memory
+dk graph traverse my-agent mem-001 --depth 3 --max-nodes 50
+```
+
+---
+
+### `dk entity`
+
+Named entity extraction from text.
+
+```bash
+# Extract entities
+dk entity extract my-agent "Alice works at Dakera AI in San Francisco"
+
+# Extract and store as memories
+dk entity extract my-agent "OpenAI released GPT-5" --store
+```
+
+---
+
+### `dk vector`
+
+Low-level vector store operations.
+
+```bash
+# Upsert a single vector
+dk vector upsert-one --namespace my-ns --id vec-001 --values 0.1,0.2,0.3
+
+# Delete a vector
+dk vector delete --namespace my-ns --id vec-001
+
+# Export vectors with pagination
+dk vector export --namespace my-ns --limit 1000
+
+# Explain a query execution plan
+dk vector explain --namespace my-ns --values 0.1,0.2,0.3 --top-k 10
+```
+
+---
+
+### `dk index`
+
+Index management.
+
+```bash
+dk index stats --namespace my-ns
+dk index fulltext-stats --namespace my-ns
+dk index rebuild --namespace my-ns --dry-run
+dk index rebuild --namespace my-ns --index-type vector --yes
+```
+
+---
+
+### `dk keys`
+
+API key management.
+
+```bash
+dk keys list
+dk keys create my-key --permissions read,write
+dk keys delete key-abc123
+dk keys usage key-abc123
+```
+
+---
+
+### `dk analytics`
+
+Platform analytics and metrics.
+
+```bash
+dk analytics overview --period 24h
+dk analytics latency --period 7d
+dk analytics throughput --period 1h
+dk analytics storage
+```
+
+---
+
+### `dk ops`
+
+Operations and maintenance.
+
+```bash
+dk ops stats
+dk ops diagnostics
+dk ops jobs
+dk ops compact --namespace my-ns
+```
+
+---
+
+### `dk admin`
+
+Administrative operations (requires admin key).
+
+```bash
+dk admin cluster-status
+dk admin cluster-nodes
+dk admin cache-stats
+dk admin cache-clear
+dk admin cache-clear --namespace my-ns
+dk admin backup-create
+dk admin backup-list
+dk admin backup-restore backup-id-123
+dk admin index-stats --namespace my-ns
+dk admin optimize --namespace my-ns
+dk admin slow-queries --limit 20
+```
+
+---
+
+### `dk config`
+
+Show or manage server configuration.
+
+```bash
+dk config
+dk config profile add staging --url http://staging:3000
+dk config profile use staging
+dk config profile list
+```
+
+---
+
+### `dk completion`
+
+Shell completion scripts.
+
+```bash
+# Bash
+dk completion bash --install
+
+# Zsh
+dk completion zsh --install
+
+# Fish
+dk completion fish --install
+
+# PowerShell
+dk completion powershell
+```
+
+---
 
 ## Exit Codes
 
@@ -125,10 +439,9 @@ dk --profile staging namespace list
 | 5 | Invalid input |
 | 6 | Server-side error (5xx) |
 
-## Documentation
+Scripts can check `$?` after each command.
 
-→ [Full docs](https://dakera.ai/docs)  
-→ [CLI reference](https://dakera.ai/docs/cli)
+---
 
 ## Related
 
