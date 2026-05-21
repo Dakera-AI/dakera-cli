@@ -2,14 +2,13 @@
 
 use anyhow::{Context, Result};
 use clap::ArgMatches;
-use dakera_client::reqwest;
 use serde_json::Value;
 
 use crate::context::Context as Ctx;
 use crate::output;
 
 async fn keys_get(url: &str, path: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .get(format!("{}{}", url, path))
         .send()
@@ -25,7 +24,7 @@ async fn keys_get(url: &str, path: &str) -> Result<Value> {
 }
 
 async fn keys_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let mut req = client.post(format!("{}{}", url, path));
     if let Some(b) = body {
         req = req.json(b);
@@ -48,7 +47,7 @@ async fn keys_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value>
 }
 
 async fn keys_delete(url: &str, path: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .delete(format!("{}{}", url, path))
         .send()
@@ -181,4 +180,47 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_keys_command;
+
+    #[test]
+    fn keys_create_requires_name() {
+        assert!(
+            build_keys_command()
+                .try_get_matches_from(["keys", "create"])
+                .is_err(),
+            "keys create without name should fail"
+        );
+    }
+
+    #[test]
+    fn keys_create_with_permissions_flag() {
+        let m = build_keys_command()
+            .try_get_matches_from(["keys", "create", "my-key", "--permissions", "write"])
+            .expect("keys create with --permissions should parse");
+        let sub = m.subcommand_matches("create").unwrap();
+        assert_eq!(sub.get_one::<String>("permissions").unwrap(), "write");
+    }
+
+    #[test]
+    fn keys_delete_requires_key_id() {
+        assert!(
+            build_keys_command()
+                .try_get_matches_from(["keys", "delete"])
+                .is_err(),
+            "keys delete without key_id should fail"
+        );
+    }
+
+    #[test]
+    fn keys_create_with_expiry_in_days() {
+        let m = build_keys_command()
+            .try_get_matches_from(["keys", "create", "expiring-key", "--expires", "30"])
+            .expect("keys create with --expires should parse");
+        let sub = m.subcommand_matches("create").unwrap();
+        assert_eq!(*sub.get_one::<u64>("expires").unwrap(), 30u64);
+    }
 }

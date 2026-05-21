@@ -184,6 +184,44 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_analytics_command;
+
+    #[test]
+    fn analytics_overview_subcommand_recognized() {
+        build_analytics_command()
+            .try_get_matches_from(["analytics", "overview"])
+            .expect("analytics overview should parse");
+    }
+
+    #[test]
+    fn analytics_overview_period_defaults_to_24h() {
+        let m = build_analytics_command()
+            .try_get_matches_from(["analytics", "overview"])
+            .unwrap();
+        let sub = m.subcommand_matches("overview").unwrap();
+        assert_eq!(sub.get_one::<String>("period").unwrap(), "24h");
+    }
+
+    #[test]
+    fn analytics_latency_with_namespace_filter() {
+        let m = build_analytics_command()
+            .try_get_matches_from([
+                "analytics",
+                "latency",
+                "--namespace",
+                "core-engine",
+                "--period",
+                "7d",
+            ])
+            .expect("analytics latency with namespace should parse");
+        let sub = m.subcommand_matches("latency").unwrap();
+        assert_eq!(sub.get_one::<String>("namespace").unwrap(), "core-engine");
+        assert_eq!(sub.get_one::<String>("period").unwrap(), "7d");
+    }
+}
+
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;

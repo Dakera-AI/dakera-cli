@@ -309,6 +309,62 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
         }
 
+        Some(("batch-forget", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let memory_type = sub_matches.get_one::<String>("type").cloned();
+            let min_importance = sub_matches.get_one::<f32>("min-importance").copied();
+            let max_age_days = sub_matches.get_one::<u32>("max-age-days").copied();
+            let dry_run = sub_matches.get_flag("dry-run");
+
+            let mut filters = serde_json::json!({});
+            if let Some(ref mt) = memory_type {
+                filters["memory_type"] = serde_json::Value::String(mt.clone());
+            }
+            if let Some(mi) = min_importance {
+                filters["min_importance"] = serde_json::json!(mi);
+            }
+            if let Some(age) = max_age_days {
+                filters["max_age_days"] = serde_json::json!(age);
+            }
+            if dry_run {
+                filters["dry_run"] = serde_json::Value::Bool(true);
+            }
+
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "filters": filters
+            });
+
+            let path = "/v1/memories/forget/batch";
+            let t = ctx.log_request("POST", path);
+            let http_client = super::authed_client();
+            let resp = http_client
+                .post(format!("{}{}", ctx.url, path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to POST {}: {}", path, e))?;
+            let status = resp.status();
+            let text = resp.text().await?;
+            ctx.log_response(t, &status.to_string());
+            if !status.is_success() {
+                anyhow::bail!("Request failed ({}): {}", status, text);
+            }
+
+            let data: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or(serde_json::json!({ "deleted_count": 0 }));
+            let count = data
+                .get("deleted_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            if dry_run {
+                output::info(&format!("[dry-run] Would delete {} memories", count));
+            } else {
+                output::success(&format!("Deleted {} memories", count));
+            }
+        }
+
         _ => {
             output::error("Unknown memory subcommand. Use --help for usage.");
             std::process::exit(1);
@@ -316,4 +372,68 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_memory_type_defaults_to_episodic_for_unknown() {
+        assert!(matches!(parse_memory_type("unknown"), MemoryType::Episodic));
+        assert!(matches!(parse_memory_type(""), MemoryType::Episodic));
+        assert!(matches!(
+            parse_memory_type("EPISODIC"),
+            MemoryType::Episodic
+        ));
+    }
+
+    #[test]
+    fn parse_memory_type_recognizes_all_variants() {
+        assert!(matches!(
+            parse_memory_type("episodic"),
+            MemoryType::Episodic
+        ));
+        assert!(matches!(
+            parse_memory_type("semantic"),
+            MemoryType::Semantic
+        ));
+        assert!(matches!(
+            parse_memory_type("procedural"),
+            MemoryType::Procedural
+        ));
+        assert!(matches!(parse_memory_type("working"), MemoryType::Working));
+    }
+
+    #[test]
+    fn parse_memory_type_is_case_insensitive() {
+        assert!(matches!(
+            parse_memory_type("SEMANTIC"),
+            MemoryType::Semantic
+        ));
+        assert!(matches!(
+            parse_memory_type("Procedural"),
+            MemoryType::Procedural
+        ));
+        assert!(matches!(parse_memory_type("WORKING"), MemoryType::Working));
+    }
+
+    #[test]
+    fn memory_type_to_string_returns_lowercase() {
+        assert_eq!(memory_type_to_string(&MemoryType::Episodic), "episodic");
+        assert_eq!(memory_type_to_string(&MemoryType::Semantic), "semantic");
+        assert_eq!(memory_type_to_string(&MemoryType::Procedural), "procedural");
+        assert_eq!(memory_type_to_string(&MemoryType::Working), "working");
+    }
+
+    #[test]
+    fn parse_and_stringify_are_inverses() {
+        for s in &["episodic", "semantic", "procedural", "working"] {
+            assert_eq!(
+                &memory_type_to_string(&parse_memory_type(s)),
+                s,
+                "round-trip failed for: {s}"
+            );
+        }
+    }
 }

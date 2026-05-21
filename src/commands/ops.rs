@@ -258,6 +258,44 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_ops_command;
+
+    #[test]
+    fn ops_diagnostics_subcommand_recognized() {
+        build_ops_command()
+            .try_get_matches_from(["ops", "diagnostics"])
+            .expect("ops diagnostics should parse");
+    }
+
+    #[test]
+    fn ops_metrics_subcommand_recognized() {
+        build_ops_command()
+            .try_get_matches_from(["ops", "metrics"])
+            .expect("ops metrics should parse");
+    }
+
+    #[test]
+    fn ops_job_requires_id() {
+        assert!(
+            build_ops_command()
+                .try_get_matches_from(["ops", "job"])
+                .is_err(),
+            "ops job without id should fail"
+        );
+    }
+
+    #[test]
+    fn ops_compact_with_namespace_flag() {
+        let m = build_ops_command()
+            .try_get_matches_from(["ops", "compact", "--namespace", "my-ns"])
+            .expect("ops compact with --namespace should parse");
+        let sub = m.subcommand_matches("compact").unwrap();
+        assert_eq!(sub.get_one::<String>("namespace").unwrap(), "my-ns");
+    }
+}
+
 fn format_duration(seconds: u64) -> String {
     if seconds < 60 {
         format!("{}s", seconds)

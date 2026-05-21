@@ -11,7 +11,7 @@ pub fn build_cli() -> Command {
         .author("Dakera Team")
         .about("Dakera CLI - Manage your AI agent memory platform from the command line")
         .after_help(
-            "Examples:\n  dk health\n  dk namespace list\n  dk memory store my-agent 'Completed task X' --importance 0.8\n  dk memory recall my-agent 'recent tasks' --top-k 5\n  dk vector upsert -n my-ns --file vectors.json\n  dk completion zsh --install\n\nError exit codes:\n  0  success\n  1  general error\n  2  connection error (server unreachable)\n  3  not found\n  4  permission denied\n  5  invalid input\n  6  server error",
+            "Examples:\n  dk health\n  dk namespace list\n  dk memory store my-agent 'Completed task X' --importance 0.8\n  dk memory recall my-agent 'recent tasks' --top-k 5\n  dk text search 'user preferences' --namespace default\n  dk completion zsh --install\n\nError exit codes:\n  0  success\n  1  general error\n  2  connection error (server unreachable)\n  3  not found\n  4  permission denied\n  5  invalid input\n  6  server error",
         )
         .arg(
             Arg::new("url")
@@ -59,7 +59,6 @@ pub fn build_cli() -> Command {
                 ),
         )
         .subcommand(build_namespace_command())
-        .subcommand(build_vector_command())
         .subcommand(build_index_command())
         .subcommand(build_ops_command())
         .subcommand(build_memory_command())
@@ -67,10 +66,10 @@ pub fn build_cli() -> Command {
         .subcommand(build_agent_command())
         .subcommand(build_knowledge_command())
         .subcommand(build_analytics_command())
-        .subcommand(build_admin_command())
         .subcommand(build_keys_command())
         .subcommand(build_config_command())
         .subcommand(build_completion_command())
+        .subcommand(build_text_command())
 }
 
 pub fn build_config_command() -> Command {
@@ -220,304 +219,6 @@ pub fn build_namespace_command() -> Command {
                         .arg(Arg::new("rate-limit-enabled").long("rate-limit-enabled").value_parser(value_parser!(bool)).help("Enable per-namespace store/recall rate limiting (default: false)"))
                         .arg(Arg::new("rate-limit-stores-per-minute").long("rate-limit-stores-per-minute").value_parser(value_parser!(u32)).help("Max store operations per minute (omit for unlimited)"))
                         .arg(Arg::new("rate-limit-recalls-per-minute").long("rate-limit-recalls-per-minute").value_parser(value_parser!(u32)).help("Max recall operations per minute (omit for unlimited)")),
-                ),
-        )
-}
-
-pub fn build_vector_command() -> Command {
-    Command::new("vector")
-        .about("Manage vectors")
-        .subcommand(
-            Command::new("upsert")
-                .about("Upsert vectors from a JSON file")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file containing vectors"),
-                )
-                .arg(
-                    Arg::new("batch-size")
-                        .short('b')
-                        .long("batch-size")
-                        .default_value("100")
-                        .value_parser(value_parser!(usize))
-                        .help("Batch size for large files"),
-                ),
-        )
-        .subcommand(
-            Command::new("upsert-one")
-                .about("Upsert a single vector")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("id")
-                        .short('i')
-                        .long("id")
-                        .required(true)
-                        .help("Vector ID"),
-                )
-                .arg(
-                    Arg::new("values")
-                        .short('V')
-                        .long("values")
-                        .required(true)
-                        .value_delimiter(',')
-                        .value_parser(value_parser!(f32))
-                        .help("Vector values (comma-separated floats)"),
-                )
-                .arg(
-                    Arg::new("metadata")
-                        .short('m')
-                        .long("metadata")
-                        .help("Optional metadata as JSON string"),
-                ),
-        )
-        .subcommand(
-            Command::new("query")
-                .about("Query for similar vectors")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("values")
-                        .short('V')
-                        .long("values")
-                        .required(true)
-                        .value_delimiter(',')
-                        .value_parser(value_parser!(f32))
-                        .help("Query vector values (comma-separated floats)"),
-                )
-                .arg(
-                    Arg::new("top-k")
-                        .short('k')
-                        .long("top-k")
-                        .default_value("10")
-                        .value_parser(value_parser!(u32))
-                        .help("Number of results to return"),
-                )
-                .arg(
-                    Arg::new("include-metadata")
-                        .short('m')
-                        .long("include-metadata")
-                        .action(ArgAction::SetTrue)
-                        .help("Include metadata in results"),
-                )
-                .arg(
-                    Arg::new("filter")
-                        .long("filter")
-                        .help("Filter expression as JSON"),
-                ),
-        )
-        .subcommand(
-            Command::new("query-file")
-                .about("Query from a file")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file containing query"),
-                ),
-        )
-        .subcommand(
-            Command::new("delete")
-                .about("Delete vectors by ID")
-                .after_help("Examples:\n  dk vector delete -n my-ns --ids id1,id2 --dry-run\n  dk vector delete -n my-ns --all --dry-run\n  dk vector delete -n my-ns --ids id1,id2 --yes")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("ids")
-                        .short('i')
-                        .long("ids")
-                        .value_delimiter(',')
-                        .help("Vector IDs to delete"),
-                )
-                .arg(
-                    Arg::new("all")
-                        .long("all")
-                        .action(ArgAction::SetTrue)
-                        .help("Delete all vectors (dangerous!)"),
-                )
-                .arg(
-                    Arg::new("yes")
-                        .short('y')
-                        .long("yes")
-                        .action(ArgAction::SetTrue)
-                        .help("Skip confirmation prompt"),
-                )
-                .arg(
-                    Arg::new("dry-run")
-                        .long("dry-run")
-                        .action(ArgAction::SetTrue)
-                        .help("Show what would be deleted without making any changes"),
-                ),
-        )
-        .subcommand(
-            Command::new("multi-search")
-                .about("Multi-vector search with positive/negative vectors and MMR")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file with multi-vector search request"),
-                ),
-        )
-        .subcommand(
-            Command::new("unified-query")
-                .about("Unified query combining vector and text search")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file with unified query request"),
-                ),
-        )
-        .subcommand(
-            Command::new("aggregate")
-                .about("Aggregate vectors with grouping")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file with aggregation request"),
-                ),
-        )
-        .subcommand(
-            Command::new("export")
-                .about("Export vectors with pagination")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("cursor")
-                        .short('c')
-                        .long("cursor")
-                        .help("Pagination cursor from previous export"),
-                )
-                .arg(
-                    Arg::new("limit")
-                        .short('l')
-                        .long("limit")
-                        .default_value("100")
-                        .value_parser(value_parser!(u32))
-                        .help("Maximum number of vectors to export"),
-                )
-                .arg(
-                    Arg::new("include-vectors")
-                        .long("include-vectors")
-                        .action(ArgAction::SetTrue)
-                        .help("Include vector values in export"),
-                ),
-        )
-        .subcommand(
-            Command::new("explain")
-                .about("Explain query execution plan")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("values")
-                        .short('V')
-                        .long("values")
-                        .required(true)
-                        .value_delimiter(',')
-                        .value_parser(value_parser!(f32))
-                        .help("Query vector values (comma-separated floats)"),
-                )
-                .arg(
-                    Arg::new("top-k")
-                        .short('k')
-                        .long("top-k")
-                        .default_value("10")
-                        .value_parser(value_parser!(u32))
-                        .help("Number of results to return"),
-                )
-                .arg(
-                    Arg::new("include-metadata")
-                        .short('m')
-                        .long("include-metadata")
-                        .action(ArgAction::SetTrue)
-                        .help("Include metadata in results"),
-                ),
-        )
-        .subcommand(
-            Command::new("upsert-columns")
-                .about("Column-format vector upsert from JSON file")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .required(true)
-                        .help("Namespace name"),
-                )
-                .arg(
-                    Arg::new("file")
-                        .short('f')
-                        .long("file")
-                        .required(true)
-                        .help("JSON file with column upsert data"),
                 ),
         )
 }
@@ -802,6 +503,36 @@ pub fn build_memory_command() -> Command {
                         .help("Relevance score (0.0 to 1.0)"),
                 ),
         )
+        .subcommand(
+            Command::new("batch-forget")
+                .about("Batch delete memories matching filters")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(
+                    Arg::new("type")
+                        .short('t')
+                        .long("type")
+                        .value_parser(["episodic", "semantic", "procedural", "working"])
+                        .help("Delete memories of this type"),
+                )
+                .arg(
+                    Arg::new("min-importance")
+                        .long("min-importance")
+                        .value_parser(value_parser!(f32))
+                        .help("Delete memories with importance below this value"),
+                )
+                .arg(
+                    Arg::new("max-age-days")
+                        .long("max-age-days")
+                        .value_parser(value_parser!(u32))
+                        .help("Delete memories older than this many days"),
+                )
+                .arg(
+                    Arg::new("dry-run")
+                        .long("dry-run")
+                        .action(ArgAction::SetTrue)
+                        .help("Preview deletions without removing any memories"),
+                ),
+        )
 }
 
 pub fn build_session_command() -> Command {
@@ -1022,136 +753,6 @@ pub fn build_knowledge_command() -> Command {
         )
 }
 
-pub fn build_admin_command() -> Command {
-    Command::new("admin")
-        .about("Cluster administration, caching, backups, and configuration")
-        .subcommand(Command::new("cluster-status").about("Get cluster status overview"))
-        .subcommand(Command::new("cluster-nodes").about("List cluster nodes"))
-        .subcommand(
-            Command::new("optimize")
-                .about("Optimize a namespace (compact indexes, reclaim space)")
-                .arg(
-                    Arg::new("namespace")
-                        .required(true)
-                        .help("Namespace to optimize"),
-                ),
-        )
-        .subcommand(
-            Command::new("index-stats")
-                .about("Get index statistics for a namespace")
-                .arg(Arg::new("namespace").required(true).help("Namespace name")),
-        )
-        .subcommand(
-            Command::new("rebuild-indexes")
-                .about("Rebuild indexes for a namespace")
-                .arg(Arg::new("namespace").required(true).help("Namespace name")),
-        )
-        .subcommand(Command::new("cache-stats").about("Get cache statistics"))
-        .subcommand(
-            Command::new("cache-clear")
-                .about("Clear cache (optionally for a specific namespace)")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Namespace to clear cache for (all if omitted)"),
-                ),
-        )
-        .subcommand(Command::new("config-get").about("Get current server configuration"))
-        .subcommand(
-            Command::new("config-set")
-                .about("Update a configuration value")
-                .arg(
-                    Arg::new("key")
-                        .short('k')
-                        .long("key")
-                        .required(true)
-                        .help("Configuration key"),
-                )
-                .arg(
-                    Arg::new("value")
-                        .short('V')
-                        .long("value")
-                        .required(true)
-                        .help("Configuration value (string or JSON)"),
-                ),
-        )
-        .subcommand(Command::new("quotas-get").about("List all namespace quotas"))
-        .subcommand(
-            Command::new("quotas-set")
-                .about("Set namespace quotas")
-                .arg(
-                    Arg::new("data")
-                        .short('d')
-                        .long("data")
-                        .required(true)
-                        .help("Quota configuration as JSON string"),
-                ),
-        )
-        .subcommand(
-            Command::new("slow-queries")
-                .about("List slow queries")
-                .arg(
-                    Arg::new("limit")
-                        .short('l')
-                        .long("limit")
-                        .default_value("20")
-                        .value_parser(value_parser!(u32))
-                        .help("Maximum number of queries to return"),
-                )
-                .arg(
-                    Arg::new("min-duration")
-                        .long("min-duration")
-                        .value_parser(value_parser!(f64))
-                        .help("Minimum duration in milliseconds"),
-                ),
-        )
-        .subcommand(
-            Command::new("backup-create")
-                .about("Create a new backup")
-                .arg(
-                    Arg::new("no-data")
-                        .long("no-data")
-                        .action(ArgAction::SetTrue)
-                        .help("Create schema-only backup without vector data"),
-                ),
-        )
-        .subcommand(Command::new("backup-list").about("List all backups"))
-        .subcommand(
-            Command::new("backup-restore")
-                .about("Restore from a backup")
-                .arg(
-                    Arg::new("backup_id")
-                        .required(true)
-                        .help("Backup ID to restore"),
-                ),
-        )
-        .subcommand(
-            Command::new("backup-delete").about("Delete a backup").arg(
-                Arg::new("backup_id")
-                    .required(true)
-                    .help("Backup ID to delete"),
-            ),
-        )
-        .subcommand(
-            Command::new("configure-ttl")
-                .about("Configure TTL (time-to-live) for a namespace")
-                .arg(Arg::new("namespace").required(true).help("Namespace name"))
-                .arg(
-                    Arg::new("ttl-seconds")
-                        .long("ttl-seconds")
-                        .required(true)
-                        .value_parser(value_parser!(u64))
-                        .help("TTL in seconds for vectors in this namespace"),
-                )
-                .arg(
-                    Arg::new("strategy")
-                        .long("strategy")
-                        .help("TTL strategy (e.g. delete, archive)"),
-                ),
-        )
-}
-
 pub fn build_keys_command() -> Command {
     Command::new("keys")
         .about("Manage API keys")
@@ -1266,5 +867,29 @@ pub fn build_analytics_command() -> Command {
                     .long("namespace")
                     .help("Filter by namespace"),
             ),
+        )
+}
+
+pub fn build_text_command() -> Command {
+    Command::new("text")
+        .about("Full-text (BM25) search across memories")
+        .subcommand(
+            Command::new("search")
+                .about("BM25 full-text search")
+                .arg(Arg::new("query").required(true).help("Search query"))
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .help("Namespace to search in"),
+                )
+                .arg(
+                    Arg::new("limit")
+                        .short('l')
+                        .long("limit")
+                        .default_value("10")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum number of results"),
+                ),
         )
 }

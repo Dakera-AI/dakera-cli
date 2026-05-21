@@ -151,3 +151,34 @@ fn prompt_default(label: &str, default: &str) -> Result<String> {
         trimmed.to_string()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_cli;
+
+    #[test]
+    fn init_subcommand_is_recognized_by_cli() {
+        build_cli()
+            .try_get_matches_from(["dk", "init"])
+            .expect("dk init should parse successfully");
+    }
+
+    #[test]
+    fn init_has_no_required_args() {
+        // init is fully interactive — no required CLI args
+        let m = build_cli()
+            .try_get_matches_from(["dk", "init"])
+            .expect("dk init requires no arguments");
+        assert!(m.subcommand_matches("init").is_some());
+    }
+
+    #[test]
+    fn init_does_not_accept_unknown_flags() {
+        assert!(
+            build_cli()
+                .try_get_matches_from(["dk", "init", "--unknown-flag"])
+                .is_err(),
+            "init should reject unknown flags"
+        );
+    }
+}

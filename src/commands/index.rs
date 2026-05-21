@@ -108,3 +108,36 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_index_command;
+
+    #[test]
+    fn index_stats_requires_namespace() {
+        assert!(
+            build_index_command()
+                .try_get_matches_from(["index", "stats"])
+                .is_err(),
+            "index stats without --namespace should fail"
+        );
+    }
+
+    #[test]
+    fn index_rebuild_dry_run_flag_works() {
+        let m = build_index_command()
+            .try_get_matches_from(["index", "rebuild", "--namespace", "ns1", "--dry-run"])
+            .expect("index rebuild --dry-run should parse");
+        let sub = m.subcommand_matches("rebuild").unwrap();
+        assert!(sub.get_flag("dry-run"));
+    }
+
+    #[test]
+    fn index_rebuild_index_type_defaults_to_all() {
+        let m = build_index_command()
+            .try_get_matches_from(["index", "rebuild", "--namespace", "ns1", "--yes"])
+            .expect("index rebuild should parse");
+        let sub = m.subcommand_matches("rebuild").unwrap();
+        assert_eq!(sub.get_one::<String>("index-type").unwrap(), "all");
+    }
+}

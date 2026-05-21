@@ -140,3 +140,36 @@ fn format_duration(seconds: u64) -> String {
         format!("{}d {}h", seconds / 86400, (seconds % 86400) / 3600)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_duration_seconds_only() {
+        assert_eq!(format_duration(0), "0s");
+        assert_eq!(format_duration(1), "1s");
+        assert_eq!(format_duration(59), "59s");
+    }
+
+    #[test]
+    fn format_duration_minutes_and_seconds() {
+        assert_eq!(format_duration(60), "1m 0s");
+        assert_eq!(format_duration(90), "1m 30s");
+        assert_eq!(format_duration(3599), "59m 59s");
+    }
+
+    #[test]
+    fn format_duration_hours_and_minutes() {
+        assert_eq!(format_duration(3600), "1h 0m");
+        assert_eq!(format_duration(3660), "1h 1m");
+        assert_eq!(format_duration(86399), "23h 59m");
+    }
+
+    #[test]
+    fn format_duration_days_and_hours() {
+        assert_eq!(format_duration(86400), "1d 0h");
+        assert_eq!(format_duration(90000), "1d 1h");
+        assert_eq!(format_duration(172800), "2d 0h");
+    }
+}

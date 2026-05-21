@@ -103,7 +103,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let path = format!("/v1/sessions{}", query_string);
             let t = ctx.log_request("GET", &path);
             let list_url = format!("{}{}", ctx.url, path);
-            let response = dakera_client::reqwest::get(&list_url).await?;
+            let response = super::authed_client().get(&list_url).send().await?;
             let status_str = if response.status().is_success() {
                 "200 OK"
             } else {
@@ -191,4 +191,47 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::build_session_command;
+
+    #[test]
+    fn session_start_requires_agent_id() {
+        assert!(
+            build_session_command()
+                .try_get_matches_from(["session", "start"])
+                .is_err(),
+            "session start without agent_id should fail"
+        );
+    }
+
+    #[test]
+    fn session_end_requires_session_id() {
+        assert!(
+            build_session_command()
+                .try_get_matches_from(["session", "end"])
+                .is_err(),
+            "session end without session_id should fail"
+        );
+    }
+
+    #[test]
+    fn session_list_limit_defaults_to_50() {
+        let m = build_session_command()
+            .try_get_matches_from(["session", "list"])
+            .expect("session list should parse successfully");
+        let sub = m.subcommand_matches("list").unwrap();
+        assert_eq!(*sub.get_one::<u32>("limit").unwrap(), 50u32);
+    }
+
+    #[test]
+    fn session_end_with_summary_flag() {
+        let m = build_session_command()
+            .try_get_matches_from(["session", "end", "sess-123", "--summary", "Good run"])
+            .expect("session end with summary should parse");
+        let sub = m.subcommand_matches("end").unwrap();
+        assert_eq!(sub.get_one::<String>("summary").unwrap(), "Good run");
+    }
 }

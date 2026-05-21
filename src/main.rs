@@ -6,14 +6,15 @@ mod config;
 mod context;
 pub mod error;
 mod output;
+#[allow(dead_code)]
 mod retry;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::cli::build_cli;
 use crate::commands::{
-    admin, agent, analytics, completion, config as config_cmd, health, index, init, keys,
-    knowledge, memory, namespace, ops, session, vector,
+    agent, analytics, completion, config as config_cmd, health, index, init, keys, knowledge,
+    memory, namespace, ops, session, text,
 };
 use crate::config::Config;
 use crate::context::Context;
@@ -80,6 +81,48 @@ async fn main() {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_format_from_json() {
+        assert!(matches!(OutputFormat::from("json"), OutputFormat::Json));
+    }
+
+    #[test]
+    fn output_format_from_compact() {
+        assert!(matches!(
+            OutputFormat::from("compact"),
+            OutputFormat::Compact
+        ));
+    }
+
+    #[test]
+    fn output_format_from_table() {
+        assert!(matches!(OutputFormat::from("table"), OutputFormat::Table));
+    }
+
+    #[test]
+    fn output_format_unknown_defaults_to_table() {
+        assert!(matches!(OutputFormat::from("unknown"), OutputFormat::Table));
+    }
+
+    #[test]
+    fn output_format_default_is_table() {
+        assert!(matches!(OutputFormat::default(), OutputFormat::Table));
+    }
+
+    #[test]
+    fn output_format_case_insensitive() {
+        assert!(matches!(OutputFormat::from("JSON"), OutputFormat::Json));
+        assert!(matches!(
+            OutputFormat::from("COMPACT"),
+            OutputFormat::Compact
+        ));
+    }
+}
+
 async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> anyhow::Result<()> {
     let config = match matches.get_one::<String>("profile") {
         Some(p) => Config::load_with_profile(p),
@@ -102,7 +145,6 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
             health::execute(&ctx, detailed).await?;
         }
         Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
-        Some(("vector", sub_matches)) => vector::execute(&ctx, sub_matches).await?,
         Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
         Some(("ops", sub_matches)) => ops::execute(&ctx, sub_matches).await?,
         Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,
@@ -110,7 +152,6 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
         Some(("agent", sub_matches)) => agent::execute(&ctx, sub_matches).await?,
         Some(("knowledge", sub_matches)) => knowledge::execute(&ctx, sub_matches).await?,
         Some(("analytics", sub_matches)) => analytics::execute(&ctx, sub_matches).await?,
-        Some(("admin", sub_matches)) => admin::execute(&ctx, sub_matches).await?,
         Some(("keys", sub_matches)) => keys::execute(&ctx, sub_matches).await?,
         Some(("completion", sub_matches)) => {
             let shell = sub_matches.get_one::<String>("shell").unwrap();
@@ -118,6 +159,7 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
             completion::execute(shell, install)?;
         }
         Some(("config", sub_matches)) => config_cmd::execute(sub_matches).await?,
+        Some(("text", sub_matches)) => text::execute(&ctx, sub_matches).await?,
         _ => build_cli().print_help()?,
     }
 
