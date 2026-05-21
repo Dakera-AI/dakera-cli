@@ -1,10 +1,10 @@
 # ⚡ dakera-cli
 
-[![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE) [![Docs](https://img.shields.io/badge/docs-dakera.ai%2Fdocs-3b82f6?style=flat-square)](https://dakera.ai/docs) [![dakera.ai](https://img.shields.io/badge/dakera.ai-website-22c55e?style=flat-square)](https://dakera.ai)
+[![CI](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Dakera-AI/dakera-cli/actions/workflows/ci.yml) [![Crate](https://img.shields.io/crates/v/dakera-cli?logo=rust)](https://crates.io/crates/dakera-cli) [![Downloads](https://img.shields.io/crates/d/dakera-cli)](https://crates.io/crates/dakera-cli) [![License: MIT](https://img.shields.io/github/license/Dakera-AI/dakera-cli)](LICENSE) [![LoCoMo 87.8%](https://img.shields.io/badge/LoCoMo-87.8%25-22c55e?style=flat-square)](https://dakera.ai/benchmark) [![Docs](https://img.shields.io/badge/docs-dakera.ai%2Fdocs-3b82f6?style=flat-square)](https://dakera.ai/docs) [![dakera.ai](https://img.shields.io/badge/dakera.ai-website-22c55e?style=flat-square)](https://dakera.ai)
 
 Command-line interface for [Dakera AI](https://dakera.ai) — inspect and manage a Dakera memory instance from the terminal.
 
-> The Dakera memory engine scores **87.6% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
+> The Dakera memory engine scores **87.8% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
 
 ---
 
@@ -36,11 +36,56 @@ Full deployment guide (Docker Compose, Kubernetes, Helm): [dakera-deploy](https:
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
 ```bash
-cargo install dakera-cli
+brew install dakera-ai/tap/dk
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/Dakera-AI/dakera-cli/releases).
+### APT (Debian / Ubuntu)
+
+```bash
+curl -fsSL https://dakera-ai.github.io/apt-repo/KEY.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/dakera-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/dakera-archive-keyring.gpg] https://dakera-ai.github.io/apt-repo stable main" \
+  | sudo tee /etc/apt/sources.list.d/dakera.list
+sudo apt-get update && sudo apt-get install -y dk
+```
+
+### YUM / DNF (Fedora / RHEL / CentOS)
+
+```bash
+sudo tee /etc/yum.repos.d/dakera.repo << 'EOF'
+[dakera]
+name=Dakera AI
+baseurl=https://dakera-ai.github.io/rpm-repo/
+enabled=1
+gpgcheck=0
+EOF
+sudo dnf install -y dk
+```
+
+### Cargo
+
+```bash
+# From crates.io (compiles from source)
+cargo install dakera-cli
+
+# Pre-built binary via cargo-binstall (faster)
+cargo binstall dakera-cli
+```
+
+### Binary download
+
+Pre-built binaries for macOS (arm64/x64), Linux (x64/arm64), and Windows are available on the [releases page](https://github.com/Dakera-AI/dakera-cli/releases).
+
+| Platform | File |
+|---|---|
+| macOS (Apple Silicon) | `dk-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `dk-x86_64-apple-darwin.tar.gz` |
+| Linux x64 | `dk-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 | `dk-aarch64-unknown-linux-musl.tar.gz` |
+| Windows x64 | `dk-x86_64-pc-windows-msvc.zip` |
 
 ---
 
