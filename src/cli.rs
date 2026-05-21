@@ -60,13 +60,12 @@ pub fn build_cli() -> Command {
         )
         .subcommand(build_namespace_command())
         .subcommand(build_index_command())
-        .subcommand(build_ops_command())
         .subcommand(build_memory_command())
         .subcommand(build_session_command())
         .subcommand(build_agent_command())
         .subcommand(build_knowledge_command())
-        .subcommand(build_analytics_command())
         .subcommand(build_keys_command())
+        .subcommand(build_admin_command())
         .subcommand(build_config_command())
         .subcommand(build_completion_command())
         .subcommand(build_text_command())
@@ -279,58 +278,6 @@ pub fn build_index_command() -> Command {
                         .action(ArgAction::SetTrue)
                         .help("Show what would be rebuilt without making any changes"),
                 ),
-        )
-}
-
-pub fn build_ops_command() -> Command {
-    Command::new("ops")
-        .about("Operations and maintenance")
-        .subcommand(Command::new("diagnostics").about("Get system diagnostics"))
-        .subcommand(Command::new("jobs").about("List background jobs"))
-        .subcommand(
-            Command::new("job")
-                .about("Get specific job status")
-                .arg(Arg::new("id").required(true).help("Job ID")),
-        )
-        .subcommand(
-            Command::new("compact")
-                .about("Trigger index compaction")
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Target namespace (optional, compacts all if not specified)"),
-                )
-                .arg(
-                    Arg::new("force")
-                        .short('f')
-                        .long("force")
-                        .action(ArgAction::SetTrue)
-                        .help("Force compaction even if not needed"),
-                ),
-        )
-        .subcommand(
-            Command::new("shutdown")
-                .about("Gracefully shutdown the server")
-                .after_help("Examples:\n  dk ops shutdown --dry-run\n  dk ops shutdown --yes")
-                .arg(
-                    Arg::new("yes")
-                        .short('y')
-                        .long("yes")
-                        .action(ArgAction::SetTrue)
-                        .help("Skip confirmation prompt"),
-                )
-                .arg(
-                    Arg::new("dry-run")
-                        .long("dry-run")
-                        .action(ArgAction::SetTrue)
-                        .help("Show what would happen without initiating the shutdown"),
-                ),
-        )
-        .subcommand(Command::new("metrics").about("Show server metrics"))
-        .subcommand(
-            Command::new("stats")
-                .about("Show server statistics (version, state, vector count, uptime)"),
         )
 }
 
@@ -753,6 +700,136 @@ pub fn build_knowledge_command() -> Command {
         )
 }
 
+pub fn build_admin_command() -> Command {
+    Command::new("admin")
+        .about("Cluster administration, caching, backups, and configuration")
+        .subcommand(Command::new("cluster-status").about("Get cluster status overview"))
+        .subcommand(Command::new("cluster-nodes").about("List cluster nodes"))
+        .subcommand(
+            Command::new("optimize")
+                .about("Optimize a namespace (compact indexes, reclaim space)")
+                .arg(
+                    Arg::new("namespace")
+                        .required(true)
+                        .help("Namespace to optimize"),
+                ),
+        )
+        .subcommand(
+            Command::new("index-stats")
+                .about("Get index statistics for a namespace")
+                .arg(Arg::new("namespace").required(true).help("Namespace name")),
+        )
+        .subcommand(
+            Command::new("rebuild-indexes")
+                .about("Rebuild indexes for a namespace")
+                .arg(Arg::new("namespace").required(true).help("Namespace name")),
+        )
+        .subcommand(Command::new("cache-stats").about("Get cache statistics"))
+        .subcommand(
+            Command::new("cache-clear")
+                .about("Clear cache (optionally for a specific namespace)")
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .help("Namespace to clear cache for (all if omitted)"),
+                ),
+        )
+        .subcommand(Command::new("config-get").about("Get current server configuration"))
+        .subcommand(
+            Command::new("config-set")
+                .about("Update a configuration value")
+                .arg(
+                    Arg::new("key")
+                        .short('k')
+                        .long("key")
+                        .required(true)
+                        .help("Configuration key"),
+                )
+                .arg(
+                    Arg::new("value")
+                        .short('V')
+                        .long("value")
+                        .required(true)
+                        .help("Configuration value (string or JSON)"),
+                ),
+        )
+        .subcommand(Command::new("quotas-get").about("List all namespace quotas"))
+        .subcommand(
+            Command::new("quotas-set")
+                .about("Set namespace quotas")
+                .arg(
+                    Arg::new("data")
+                        .short('d')
+                        .long("data")
+                        .required(true)
+                        .help("Quota configuration as JSON string"),
+                ),
+        )
+        .subcommand(
+            Command::new("slow-queries")
+                .about("List slow queries")
+                .arg(
+                    Arg::new("limit")
+                        .short('l')
+                        .long("limit")
+                        .default_value("20")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum number of queries to return"),
+                )
+                .arg(
+                    Arg::new("min-duration")
+                        .long("min-duration")
+                        .value_parser(value_parser!(f64))
+                        .help("Minimum duration in milliseconds"),
+                ),
+        )
+        .subcommand(
+            Command::new("backup-create")
+                .about("Create a new backup")
+                .arg(
+                    Arg::new("no-data")
+                        .long("no-data")
+                        .action(ArgAction::SetTrue)
+                        .help("Create schema-only backup without vector data"),
+                ),
+        )
+        .subcommand(Command::new("backup-list").about("List all backups"))
+        .subcommand(
+            Command::new("backup-restore")
+                .about("Restore from a backup")
+                .arg(
+                    Arg::new("backup_id")
+                        .required(true)
+                        .help("Backup ID to restore"),
+                ),
+        )
+        .subcommand(
+            Command::new("backup-delete").about("Delete a backup").arg(
+                Arg::new("backup_id")
+                    .required(true)
+                    .help("Backup ID to delete"),
+            ),
+        )
+        .subcommand(
+            Command::new("configure-ttl")
+                .about("Configure TTL (time-to-live) for a namespace")
+                .arg(Arg::new("namespace").required(true).help("Namespace name"))
+                .arg(
+                    Arg::new("ttl-seconds")
+                        .long("ttl-seconds")
+                        .required(true)
+                        .value_parser(value_parser!(u64))
+                        .help("TTL in seconds for vectors in this namespace"),
+                )
+                .arg(
+                    Arg::new("strategy")
+                        .long("strategy")
+                        .help("TTL strategy (e.g. delete, archive)"),
+                ),
+        )
+}
+
 pub fn build_keys_command() -> Command {
     Command::new("keys")
         .about("Manage API keys")
@@ -803,70 +880,6 @@ pub fn build_keys_command() -> Command {
             Command::new("usage")
                 .about("Get usage statistics for an API key")
                 .arg(Arg::new("key_id").required(true).help("API key ID")),
-        )
-}
-
-pub fn build_analytics_command() -> Command {
-    Command::new("analytics")
-        .about("View platform analytics and metrics")
-        .subcommand(
-            Command::new("overview")
-                .about("Analytics overview")
-                .arg(
-                    Arg::new("period")
-                        .short('p')
-                        .long("period")
-                        .default_value("24h")
-                        .help("Time period (e.g. 1h, 24h, 7d)"),
-                )
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Filter by namespace"),
-                ),
-        )
-        .subcommand(
-            Command::new("latency")
-                .about("Latency statistics")
-                .arg(
-                    Arg::new("period")
-                        .short('p')
-                        .long("period")
-                        .default_value("24h")
-                        .help("Time period (e.g. 1h, 24h, 7d)"),
-                )
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Filter by namespace"),
-                ),
-        )
-        .subcommand(
-            Command::new("throughput")
-                .about("Throughput statistics")
-                .arg(
-                    Arg::new("period")
-                        .short('p')
-                        .long("period")
-                        .default_value("24h")
-                        .help("Time period (e.g. 1h, 24h, 7d)"),
-                )
-                .arg(
-                    Arg::new("namespace")
-                        .short('n')
-                        .long("namespace")
-                        .help("Filter by namespace"),
-                ),
-        )
-        .subcommand(
-            Command::new("storage").about("Storage statistics").arg(
-                Arg::new("namespace")
-                    .short('n')
-                    .long("namespace")
-                    .help("Filter by namespace"),
-            ),
         )
 }
 
