@@ -33,7 +33,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
             let path = "/v1/fulltext/search";
             let t = ctx.log_request("POST", path);
-            let client = reqwest::Client::new();
+            let client = super::authed_client();
             let resp = client
                 .post(format!("{}{}", ctx.url, path))
                 .json(&body)

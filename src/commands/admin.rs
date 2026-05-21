@@ -9,7 +9,7 @@ use crate::context::Context as Ctx;
 use crate::output;
 
 async fn admin_get(url: &str, path: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .get(format!("{}{}", url, path))
         .send()
@@ -25,7 +25,7 @@ async fn admin_get(url: &str, path: &str) -> Result<Value> {
 }
 
 async fn admin_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let mut req = client.post(format!("{}{}", url, path));
     if let Some(b) = body {
         req = req.json(b);
@@ -48,7 +48,7 @@ async fn admin_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value
 }
 
 async fn admin_delete(url: &str, path: &str) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .delete(format!("{}{}", url, path))
         .send()
@@ -68,7 +68,7 @@ async fn admin_delete(url: &str, path: &str) -> Result<Value> {
 }
 
 async fn admin_put(url: &str, path: &str, body: &Value) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .put(format!("{}{}", url, path))
         .json(body)

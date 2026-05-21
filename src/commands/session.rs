@@ -103,7 +103,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let path = format!("/v1/sessions{}", query_string);
             let t = ctx.log_request("GET", &path);
             let list_url = format!("{}{}", ctx.url, path);
-            let response = dakera_client::reqwest::get(&list_url).await?;
+            let response = super::authed_client().get(&list_url).send().await?;
             let status_str = if response.status().is_success() {
                 "200 OK"
             } else {

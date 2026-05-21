@@ -25,7 +25,7 @@ pub struct TraverseNodeRow {
 }
 
 async fn graph_post(url: &str, path: &str, body: &Value) -> Result<Value> {
-    let client = reqwest::Client::new();
+    let client = super::authed_client();
     let resp = client
         .post(format!("{}{}", url, path))
         .json(body)

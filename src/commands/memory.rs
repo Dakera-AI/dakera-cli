@@ -337,7 +337,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
             let path = "/v1/memories/forget/batch";
             let t = ctx.log_request("POST", path);
-            let http_client = reqwest::Client::new();
+            let http_client = super::authed_client();
             let resp = http_client
                 .post(format!("{}{}", ctx.url, path))
                 .json(&body)
