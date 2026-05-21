@@ -54,3 +54,13 @@ indicatif = "0.17"
 httpmock = "0.8"
 assert_cmd = "2.2"
 predicates = "3.1"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/dk-{ target }.tar.gz"
+bin-dir = "dk{ binary-ext }"
+pkg-fmt = "tgz"
+
+[[package.metadata.binstall.overrides]]
+target = "x86_64-pc-windows-msvc"
+pkg-url = "{ repo }/releases/download/v{ version }/dk.exe"
+pkg-fmt = "bin"
