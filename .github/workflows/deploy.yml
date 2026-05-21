@@ -21,6 +21,11 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract binary from cargo-dist archive
+        run: |
+          tar -xzf dk-x86_64-unknown-linux-gnu.tar.gz
+          chmod +x dk
+
       - name: Upload binary to server
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
