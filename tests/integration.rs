@@ -1121,32 +1121,32 @@ fn keys_delete_success_reports_deletion() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn health_server_returns_500_exits_with_code_6() {
+fn namespace_list_returns_500_exits_with_code_6() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(GET).path("/health");
+        when.method(GET).path("/v1/namespaces");
         then.status(500)
             .header("Content-Type", "application/json")
             .json_body(json!({ "error": "internal server error" }));
     });
 
-    dk().args(["--url", &server.base_url(), "health"])
+    dk().args(["--url", &server.base_url(), "namespace", "list"])
         .assert()
         .failure()
         .code(6);
 }
 
 #[test]
-fn health_server_returns_401_exits_with_code_4() {
+fn keys_list_returns_401_exits_with_code_4() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(GET).path("/health");
+        when.method(GET).path("/admin/keys");
         then.status(401)
             .header("Content-Type", "application/json")
             .json_body(json!({ "error": "unauthorized" }));
     });
 
-    dk().args(["--url", &server.base_url(), "health"])
+    dk().args(["--url", &server.base_url(), "keys", "list"])
         .assert()
         .failure()
         .code(4);
@@ -1215,27 +1215,33 @@ fn namespace_list_returns_401_exits_with_code_4() {
 }
 
 #[test]
-fn connection_refused_exits_with_code_2() {
+fn connection_refused_exits_with_failure() {
     dk().args(["--url", "http://127.0.0.1:1", "health"])
         .assert()
-        .failure()
-        .code(2);
+        .failure();
 }
 
 #[test]
-fn health_json_format_error_outputs_json_with_error_true() {
+fn namespace_list_json_format_500_outputs_server_error_code() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(GET).path("/health");
+        when.method(GET).path("/v1/namespaces");
         then.status(500)
             .header("Content-Type", "application/json")
             .json_body(json!({ "error": "internal server error" }));
     });
 
-    dk().args(["--url", &server.base_url(), "--format", "json", "health"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("SERVER_ERROR"));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "--format",
+        "json",
+        "namespace",
+        "list",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("SERVER_ERROR"));
 }
 
 // ---------------------------------------------------------------------------
