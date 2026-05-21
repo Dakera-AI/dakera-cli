@@ -56,6 +56,7 @@ assert_cmd = "2.2"
 predicates = "3.1"
 
 [package.metadata.deb]
+name = "dk"
 maintainer = "Dakera AI <hello@dakera.ai>"
 copyright = "2024-2026, Dakera AI"
 section = "utility"
@@ -69,6 +70,7 @@ Connect to Dakera server instances to manage agent memories, \
 sessions, and knowledge graphs from the command line."""
 
 [package.metadata.generate-rpm]
+name = "dk"
 assets = [
   { source = "target/release/dk", dest = "/usr/bin/dk", mode = "0755" },
 ]
