@@ -893,4 +893,3 @@ pub fn build_text_command() -> Command {
                 ),
         )
 }
-

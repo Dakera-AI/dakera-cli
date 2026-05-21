@@ -1797,4 +1797,3 @@ fn memory_batch_forget_dry_run_shows_preview() {
     .success()
     .stdout(predicate::str::contains("dry-run"));
 }
-
