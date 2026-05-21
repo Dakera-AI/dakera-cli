@@ -27,7 +27,9 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       - name: Build .deb package
-        run: cargo deb
+        run: |
+          rm -rf target/debian/
+          cargo deb
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
@@ -52,7 +54,9 @@ jobs:
       - name: Build release binary
         run: cargo build --release
       - name: Build .rpm package
-        run: cargo generate-rpm
+        run: |
+          rm -rf target/generate-rpm/
+          cargo generate-rpm
       - name: Upload rpm artifact
         uses: actions/upload-artifact@v4
         with:
