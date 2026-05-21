@@ -1,0 +1,29 @@
+name: dk
+base: core24
+version: "0.6.0"
+summary: Command-line interface for Dakera AI Agent Memory Platform
+description: |
+  Dakera CLI for querying and managing AI agent memory.
+  Connect to Dakera server instances to manage agent memories,
+  sessions, and knowledge graphs from the command line.
+
+  Configure with: dk init
+  Documentation: https://docs.dakera.ai/cli
+
+grade: stable
+confinement: strict
+
+parts:
+  dakera-cli:
+    plugin: rust
+    source: .
+    build-packages:
+      - libssl-dev
+      - pkg-config
+
+apps:
+  dk:
+    command: bin/dk
+    plugs:
+      - network
+      - home

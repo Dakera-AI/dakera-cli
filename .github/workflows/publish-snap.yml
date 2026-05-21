@@ -1,0 +1,40 @@
+name: Publish Snap
+
+on:
+  push:
+    tags:
+      - '*-?[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Snap Store channel (stable/candidate/beta/edge)'
+        required: false
+        default: 'stable'
+
+jobs:
+  snap:
+    name: Build and publish Snap package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update version in snapcraft.yaml
+        run: |
+          # Extract version from tag (strip leading 'v' or 'dk-v' prefix)
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          VERSION="${VERSION#dk-}"
+          sed -i "s/^version: .*/version: \"${VERSION}\"/" snap/snapcraft.yaml
+          echo "Building snap version: ${VERSION}"
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@v1
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.channel || 'stable' }}
