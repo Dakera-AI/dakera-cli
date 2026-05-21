@@ -20,10 +20,10 @@ jobs:
 
       - name: Update version in snapcraft.yaml
         run: |
-          # Extract version from tag (strip leading 'v' or 'dk-v' prefix)
+          # Extract version from tag: dk-v0.6.0 → 0.6.0
           VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#dk-v}"
           VERSION="${VERSION#v}"
-          VERSION="${VERSION#dk-}"
           sed -i "s/^version: .*/version: \"${VERSION}\"/" snap/snapcraft.yaml
           echo "Building snap version: ${VERSION}"
 
