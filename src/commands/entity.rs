@@ -48,9 +48,8 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
                 anyhow::bail!("Request failed ({}): {}", status, text_body);
             }
 
-            let data: serde_json::Value =
-                serde_json::from_str(&text_body)
-                    .with_context(|| "Failed to parse response JSON")?;
+            let data: serde_json::Value = serde_json::from_str(&text_body)
+                .with_context(|| "Failed to parse response JSON")?;
 
             let entities = data
                 .get("entities")

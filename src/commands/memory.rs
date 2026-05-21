@@ -351,8 +351,8 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 anyhow::bail!("Request failed ({}): {}", status, text);
             }
 
-            let data: serde_json::Value = serde_json::from_str(&text)
-                .unwrap_or(serde_json::json!({ "deleted_count": 0 }));
+            let data: serde_json::Value =
+                serde_json::from_str(&text).unwrap_or(serde_json::json!({ "deleted_count": 0 }));
             let count = data
                 .get("deleted_count")
                 .and_then(|v| v.as_u64())

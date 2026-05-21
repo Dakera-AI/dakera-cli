@@ -1463,12 +1463,7 @@ fn container_memory_search() {
         .success();
 
     container_dk(&url, &key)
-        .args([
-            "memory",
-            "search",
-            "search-test-agent",
-            "full-text search",
-        ])
+        .args(["memory", "search", "search-test-agent", "full-text search"])
         .assert()
         .success();
 }
@@ -1546,12 +1541,7 @@ fn container_knowledge_summarize_dry_run() {
     let key = container_key();
 
     container_dk(&url, &key)
-        .args([
-            "knowledge",
-            "summarize",
-            "integration-agent",
-            "--dry-run",
-        ])
+        .args(["knowledge", "summarize", "integration-agent", "--dry-run"])
         .assert()
         .success();
 }
@@ -1563,12 +1553,7 @@ fn container_knowledge_deduplicate_dry_run() {
     let key = container_key();
 
     container_dk(&url, &key)
-        .args([
-            "knowledge",
-            "deduplicate",
-            "integration-agent",
-            "--dry-run",
-        ])
+        .args(["knowledge", "deduplicate", "integration-agent", "--dry-run"])
         .assert()
         .success();
 }
@@ -1760,10 +1745,7 @@ fn container_config_show() {
     let url = container_url();
     let key = container_key();
 
-    container_dk(&url, &key)
-        .args(["config"])
-        .assert()
-        .success();
+    container_dk(&url, &key).args(["config"]).assert().success();
 }
 
 // ---------------------------------------------------------------------------
@@ -1836,12 +1818,7 @@ fn container_memory_recall_empty_agent_returns_empty() {
 
     // Recalling from an agent with no memories should succeed (empty result)
     container_dk(&url, &key)
-        .args([
-            "memory",
-            "recall",
-            "nonexistent-agent-xyz-00001",
-            "query",
-        ])
+        .args(["memory", "recall", "nonexistent-agent-xyz-00001", "query"])
         .assert()
         .success();
 }
@@ -1963,16 +1940,10 @@ fn graph_export_returns_success() {
             }));
     });
 
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "graph",
-        "export",
-        "test-agent",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("exported"));
+    dk().args(["--url", &server.base_url(), "graph", "export", "test-agent"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("exported"));
 }
 
 #[test]

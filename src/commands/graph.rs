@@ -86,10 +86,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             let result = result?;
 
-            let length = result
-                .get("length")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
+            let length = result.get("length").and_then(|v| v.as_u64()).unwrap_or(0);
             output::info(&format!(
                 "Path from '{}' to '{}': {} hops",
                 from_id, to_id, length

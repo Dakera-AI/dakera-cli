@@ -1389,7 +1389,11 @@ pub fn build_entity_command() -> Command {
             Command::new("extract")
                 .about("Extract named entities from text")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
-                .arg(Arg::new("text").required(true).help("Text to extract entities from"))
+                .arg(
+                    Arg::new("text")
+                        .required(true)
+                        .help("Text to extract entities from"),
+                )
                 .arg(
                     Arg::new("store")
                         .long("store")
