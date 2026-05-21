@@ -6,6 +6,10 @@ on:
       - '*-?[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
 
+concurrency:
+  group: publish-linux-packages-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-deb:
     name: Build .deb package
@@ -145,6 +149,13 @@ jobs:
           name: rpm-package
           path: ./rpms
 
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG hello@dakera.ai \
+            | grep sec | head -1 | awk '{print $2}' | cut -d/ -f2)
+          echo "${KEY_ID}:6:" | gpg --import-ownertrust
+
       - name: Checkout rpm-repo
         uses: actions/checkout@v4
         with:
@@ -167,7 +178,11 @@ jobs:
           # Regenerate all repository metadata
           createrepo_c --update rpm-repo/
 
-          echo "RPM repo updated successfully"
+          # Sign the repository metadata so dnf/yum clients can verify integrity
+          gpg --batch --yes --default-key "hello@dakera.ai" \
+            -abs -o rpm-repo/repodata/repomd.xml.asc rpm-repo/repodata/repomd.xml
+
+          echo "RPM repo updated and signed successfully"
 
       - name: Commit and push
         run: |

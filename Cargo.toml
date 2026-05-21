@@ -72,3 +72,13 @@ sessions, and knowledge graphs from the command line."""
 assets = [
   { source = "target/release/dk", dest = "/usr/bin/dk", mode = "0755" },
 ]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/dk-{ target }.tar.gz"
+bin-dir = "dk{ binary-ext }"
+pkg-fmt = "tgz"
+
+[[package.metadata.binstall.overrides]]
+target = "x86_64-pc-windows-msvc"
+pkg-url = "{ repo }/releases/download/v{ version }/dk.exe"
+pkg-fmt = "bin"
