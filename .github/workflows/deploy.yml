@@ -1,0 +1,42 @@
+name: Deploy Binary
+
+# Triggered after the Release workflow completes successfully.
+# Downloads the Linux x86_64 binary from the Release artifacts and deploys it to production.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+jobs:
+  deploy-binary:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    # Only deploy when the Release workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Download Linux binary from release
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-x86_64-unknown-linux-gnu
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload binary to server
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dk"
+          target: "/tmp/"
+
+      - name: Install binary on server
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            chmod +x /tmp/dk
+            mv /tmp/dk /home/dakera/.local/bin/dk
+            echo "✅ dk deployed from release ${{ github.event.workflow_run.head_branch }}"
