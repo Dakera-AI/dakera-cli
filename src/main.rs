@@ -6,6 +6,7 @@ mod config;
 mod context;
 pub mod error;
 mod output;
+#[allow(dead_code)]
 mod retry;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
