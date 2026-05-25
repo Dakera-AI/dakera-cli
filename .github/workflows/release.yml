@@ -37,7 +37,7 @@ jobs:
           echo "manifest=$(cat plan.json)" >> "$GITHUB_OUTPUT"
           cat plan.json
       - name: Upload dist-manifest.json
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-plan-dist-manifest
           path: dist-manifest.json
@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: cargo dist build --print=linkage --output-format=json --target=${{ matrix.target }} > build-dist-${{ matrix.target }}.json
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ matrix.target }}
           path: dist/
@@ -93,7 +93,7 @@ jobs:
       - name: Build global artifacts (shell/powershell installer scripts, homebrew formula)
         run: cargo dist build --output-format=json --global-artifacts > build-global.json
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-global
           path: dist/
