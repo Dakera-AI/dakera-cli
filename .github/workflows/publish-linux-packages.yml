@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download deb artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: deb-package
           path: ./debs
@@ -145,7 +145,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download rpm artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rpm-package
           path: ./rpms
