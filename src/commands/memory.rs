@@ -119,11 +119,11 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
         }
 
         Some(("get", sub_matches)) => {
-            let _agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
 
             let t = ctx.log_request("GET", &format!("/v1/memories/{}", memory_id));
-            let memory = client.get_memory(memory_id).await;
+            let memory = client.get_memory(agent_id, memory_id).await;
             match &memory {
                 Ok(_) => ctx.log_response(t, "200 OK"),
                 Err(_) => ctx.log_response(t, "ERR"),
