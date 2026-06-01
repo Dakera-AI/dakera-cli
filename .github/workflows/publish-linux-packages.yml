@@ -15,7 +15,7 @@ jobs:
     name: Build .deb package
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v5
         with:
@@ -40,7 +40,7 @@ jobs:
     name: Build .rpm package
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v5
         with:
@@ -80,7 +80,7 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Checkout apt-repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: dakera-ai/apt-repo
           token: ${{ secrets.APT_REPO_TOKEN }}
@@ -156,7 +156,7 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Checkout rpm-repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: dakera-ai/rpm-repo
           token: ${{ secrets.APT_REPO_TOKEN }}
