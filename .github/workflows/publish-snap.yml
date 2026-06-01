@@ -16,7 +16,7 @@ jobs:
     name: Build and publish Snap package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update version in snapcraft.yaml
         run: |
