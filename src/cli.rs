@@ -480,6 +480,71 @@ pub fn build_memory_command() -> Command {
                         .help("Preview deletions without removing any memories"),
                 ),
         )
+        .subcommand(
+            Command::new("batch-recall")
+                .about("Filter-based memory listing by tags, importance, time range, or type (no embedding required)")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+                .arg(
+                    Arg::new("tags")
+                        .short('T')
+                        .long("tags")
+                        .help("Comma-separated tags to filter by (all tags must match)"),
+                )
+                .arg(
+                    Arg::new("min-importance")
+                        .long("min-importance")
+                        .value_parser(value_parser!(f32))
+                        .help("Minimum importance score (0.0–1.0, inclusive)"),
+                )
+                .arg(
+                    Arg::new("max-importance")
+                        .long("max-importance")
+                        .value_parser(value_parser!(f32))
+                        .help("Maximum importance score (0.0–1.0, inclusive)"),
+                )
+                .arg(
+                    Arg::new("type")
+                        .short('t')
+                        .long("type")
+                        .value_parser(["episodic", "semantic", "procedural", "working"])
+                        .help("Filter by memory type"),
+                )
+                .arg(
+                    Arg::new("session-id")
+                        .short('s')
+                        .long("session-id")
+                        .help("Filter by session ID"),
+                )
+                .arg(
+                    Arg::new("limit")
+                        .short('l')
+                        .long("limit")
+                        .default_value("100")
+                        .value_parser(value_parser!(usize))
+                        .help("Maximum number of results to return"),
+                ),
+        )
+        .subcommand(
+            Command::new("hybrid-search")
+                .about("Hybrid BM25 + vector ANN search in a namespace (omit vector for BM25-only)")
+                .arg(Arg::new("namespace").required(true).help("Namespace to search"))
+                .arg(Arg::new("query").required(true).help("Text query"))
+                .arg(
+                    Arg::new("top-k")
+                        .short('k')
+                        .long("top-k")
+                        .default_value("10")
+                        .value_parser(value_parser!(u32))
+                        .help("Number of results to return"),
+                )
+                .arg(
+                    Arg::new("vector-weight")
+                        .long("vector-weight")
+                        .default_value("0.5")
+                        .value_parser(value_parser!(f32))
+                        .help("Vector weight 0.0–1.0 (0.0=BM25 only, 1.0=vector only)"),
+                ),
+        )
 }
 
 pub fn build_session_command() -> Command {
