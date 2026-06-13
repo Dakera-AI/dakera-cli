@@ -452,12 +452,12 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
             let response = response?;
 
-            if response.matches.is_empty() {
+            if response.results.is_empty() {
                 output::info("No results found");
             } else {
-                output::info(&format!("Found {} results", response.matches.len()));
+                output::info(&format!("Found {} results", response.results.len()));
                 let rows: Vec<HybridRow> = response
-                    .matches
+                    .results
                     .into_iter()
                     .map(|m| HybridRow {
                         id: m.id,
