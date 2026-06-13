@@ -3,10 +3,10 @@
 use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::memory::{
-    ConsolidateRequest, FeedbackRequest, MemoryType, RecallRequest, StoreMemoryRequest,
-    UpdateImportanceRequest, UpdateMemoryRequest,
+    BatchMemoryFilter, BatchRecallRequest, ConsolidateRequest, FeedbackRequest, MemoryType,
+    RecallRequest, StoreMemoryRequest, UpdateImportanceRequest, UpdateMemoryRequest,
 };
-use dakera_client::DakeraClient;
+use dakera_client::{DakeraClient, HybridSearchRequest};
 use serde::Serialize;
 
 use crate::context::Context;
@@ -18,6 +18,12 @@ pub struct MemoryRow {
     pub content: String,
     pub memory_type: String,
     pub importance: f32,
+    pub score: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HybridRow {
+    pub id: String,
     pub score: f32,
 }
 
@@ -365,6 +371,103 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
         }
 
+        Some(("batch-recall", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let limit = *sub_matches.get_one::<usize>("limit").unwrap();
+            let min_importance = sub_matches.get_one::<f32>("min-importance").copied();
+            let max_importance = sub_matches.get_one::<f32>("max-importance").copied();
+            let memory_type = sub_matches.get_one::<String>("type");
+            let session_id = sub_matches.get_one::<String>("session-id").cloned();
+            let tags: Option<Vec<String>> = sub_matches
+                .get_one::<String>("tags")
+                .map(|s| s.split(',').map(|t| t.trim().to_string()).collect());
+
+            let mut filter = BatchMemoryFilter::default();
+            if let Some(t) = tags {
+                filter = filter.with_tags(t);
+            }
+            if let Some(mi) = min_importance {
+                filter = filter.with_min_importance(mi);
+            }
+            if let Some(ma) = max_importance {
+                filter = filter.with_max_importance(ma);
+            }
+            if let Some(mt) = memory_type {
+                filter.memory_type = Some(parse_memory_type(mt));
+            }
+            if let Some(sid) = session_id {
+                filter = filter.with_session(sid);
+            }
+
+            let request = BatchRecallRequest::new(agent_id.clone())
+                .with_filter(filter)
+                .with_limit(limit);
+
+            let t = ctx.log_request("POST", "/v1/memories/recall/batch");
+            let response = client.batch_recall(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            if response.memories.is_empty() {
+                output::info("No memories found");
+            } else {
+                output::info(&format!(
+                    "Found {} memories (total: {}, filtered: {})",
+                    response.memories.len(),
+                    response.total,
+                    response.filtered
+                ));
+                let rows: Vec<MemoryRow> = response
+                    .memories
+                    .into_iter()
+                    .map(|m| MemoryRow {
+                        id: m.id,
+                        content: m.content,
+                        memory_type: memory_type_to_string(&m.memory_type),
+                        importance: m.importance,
+                        score: m.score,
+                    })
+                    .collect();
+                output::print_data(&rows, ctx.format);
+            }
+        }
+
+        Some(("hybrid-search", sub_matches)) => {
+            let namespace = sub_matches.get_one::<String>("namespace").unwrap();
+            let query = sub_matches.get_one::<String>("query").unwrap();
+            let top_k = *sub_matches.get_one::<u32>("top-k").unwrap();
+            let vector_weight = *sub_matches.get_one::<f32>("vector-weight").unwrap();
+
+            let request = HybridSearchRequest::text_only(query.clone(), top_k)
+                .with_vector_weight(vector_weight);
+
+            let t = ctx.log_request("POST", &format!("/v1/namespaces/{}/hybrid", namespace));
+            let response = client.hybrid_search(namespace, request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            if response.matches.is_empty() {
+                output::info("No results found");
+            } else {
+                output::info(&format!("Found {} results", response.matches.len()));
+                let rows: Vec<HybridRow> = response
+                    .matches
+                    .into_iter()
+                    .map(|m| HybridRow {
+                        id: m.id,
+                        score: m.score,
+                    })
+                    .collect();
+                output::print_data(&rows, ctx.format);
+            }
+        }
+
         _ => {
             output::error("Unknown memory subcommand. Use --help for usage.");
             std::process::exit(1);
@@ -435,5 +538,30 @@ mod tests {
                 "round-trip failed for: {s}"
             );
         }
+    }
+
+    #[test]
+    fn hybrid_row_serializes_id_and_score() {
+        let row = HybridRow {
+            id: "vec-1".into(),
+            score: 0.87,
+        };
+        let json = serde_json::to_value(&row).unwrap();
+        assert_eq!(json["id"], "vec-1");
+        assert!((json["score"].as_f64().unwrap() - 0.87).abs() < 1e-6);
+    }
+
+    #[test]
+    fn memory_row_serializes_all_fields() {
+        let row = MemoryRow {
+            id: "mem-1".into(),
+            content: "hello".into(),
+            memory_type: "episodic".into(),
+            importance: 0.8,
+            score: 0.9,
+        };
+        let json = serde_json::to_value(&row).unwrap();
+        assert_eq!(json["id"], "mem-1");
+        assert_eq!(json["memory_type"], "episodic");
     }
 }
