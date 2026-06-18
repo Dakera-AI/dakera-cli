@@ -70,7 +70,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: check
+          shared-key: arm64-ci
       - run: cargo check
 
   clippy:
@@ -83,7 +83,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: clippy
+          shared-key: arm64-ci
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -104,7 +104,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: test
+          shared-key: arm64-ci
       - run: cargo test
 
   integration-test:
@@ -129,6 +129,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: integration-test
+          cache-all-crates: "true"
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
