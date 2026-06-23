@@ -3,29 +3,20 @@ on:
   workflow_dispatch: {}
 jobs:
   fix-firewall:
-    name: Check and fix firewall on ARM machine
+    name: Check Hetzner Cloud Firewall for port 22
     runs-on: [self-hosted, linux, arm64]
     steps:
-      - name: Check firewall and open port 22
+      - name: Diagnose connection state
         run: |
+          echo "=== SSH service status ==="
+          systemctl status ssh.service --no-pager | head -10 || true
+          echo "=== Port 22 listening ==="
+          ss -tlnp | grep ':22' || echo "NOT listening"
           echo "=== UFW status ==="
-          ufw status verbose 2>/dev/null || echo "UFW not installed/available"
-          echo "=== iptables INPUT rules ==="
-          iptables -L INPUT -n --line-numbers 2>/dev/null | head -30 || true
-          echo "=== ip6tables INPUT rules ==="
-          ip6tables -L INPUT -n --line-numbers 2>/dev/null | head -10 || true
-          echo "=== Port 22 listening check ==="
-          ss -tlnp | grep ':22' || echo "Port 22 NOT listening"
-          echo "=== Opening port 22 if UFW is active ==="
-          if ufw status 2>/dev/null | grep -q "Status: active"; then
-            ufw allow ssh
-            echo "UFW: allowed SSH"
-          fi
-          echo "=== iptables: allow port 22 if DROP policy ==="
-          DEFAULT_POLICY=$(iptables -L INPUT --line-numbers -n 2>/dev/null | grep "Chain INPUT" | grep -oE "(DROP|REJECT)" || echo "ACCEPT")
-          if [ -n "$DEFAULT_POLICY" ]; then
-            iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT 2>/dev/null && echo "iptables: opened port 22" || true
-            ip6tables -I INPUT 1 -p tcp --dport 22 -j ACCEPT 2>/dev/null && echo "ip6tables: opened port 22" || true
-          fi
-          echo "=== Final iptables INPUT ==="
-          iptables -L INPUT -n --line-numbers 2>/dev/null | head -15 || true
+          ufw status verbose 2>/dev/null | head -20 || echo "UFW unavailable"
+          echo "=== iptables rule 1 ==="
+          iptables -L INPUT -n --line-numbers 2>/dev/null | head -5 || true
+          echo "=== Self-connect test ==="
+          nc -zv 127.0.0.1 22 2>&1 || echo "localhost:22 refused"
+          echo "=== Server public IP ==="
+          curl -sf --max-time 5 https://api.ipify.org || echo "IP unavailable"
