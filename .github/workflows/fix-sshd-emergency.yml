@@ -1,0 +1,19 @@
+name: Emergency sshd fix (DAK-7089, delete after use)
+on:
+  workflow_dispatch: {}
+jobs:
+  fix-sshd:
+    name: Restart sshd on ARM machine
+    runs-on: [self-hosted, linux, arm64]
+    steps:
+      - name: Check and restart sshd
+        run: |
+          echo "=== sshd status ==="
+          systemctl status sshd --no-pager || true
+          echo "=== Restarting sshd ==="
+          systemctl restart sshd
+          sleep 2
+          echo "=== sshd after restart ==="
+          systemctl status sshd --no-pager | head -10
+          echo "=== Port 22 ==="
+          ss -tlnp | grep ':22' || echo "Port 22 NOT listening"
