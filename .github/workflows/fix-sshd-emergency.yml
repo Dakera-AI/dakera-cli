@@ -6,14 +6,17 @@ jobs:
     name: Restart sshd on ARM machine
     runs-on: [self-hosted, linux, arm64]
     steps:
-      - name: Check and restart sshd
+      - name: Check and restart ssh
         run: |
-          echo "=== sshd status ==="
-          systemctl status sshd --no-pager || true
-          echo "=== Restarting sshd ==="
-          systemctl restart sshd
+          echo "=== ssh service status ==="
+          systemctl status ssh --no-pager || true
+          systemctl status openssh-server --no-pager 2>/dev/null || true
+          echo "=== Restarting ssh service ==="
+          systemctl restart ssh || systemctl restart openssh-server || true
+          echo "=== Enabling ssh service for future boots ==="
+          systemctl enable ssh 2>/dev/null || systemctl enable openssh-server 2>/dev/null || true
           sleep 2
-          echo "=== sshd after restart ==="
-          systemctl status sshd --no-pager | head -10
+          echo "=== ssh after restart ==="
+          systemctl status ssh --no-pager | head -10 || true
           echo "=== Port 22 ==="
-          ss -tlnp | grep ':22' || echo "Port 22 NOT listening"
+          ss -tlnp | grep ':22' || echo "Port 22 NOT listening after restart attempt"
