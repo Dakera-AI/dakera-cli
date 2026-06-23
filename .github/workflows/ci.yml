@@ -70,7 +70,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: arm64-ci
+          shared-key: arm64-ci-v2
       - run: cargo check
 
   clippy:
@@ -83,7 +83,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: arm64-ci
+          shared-key: arm64-ci-v2
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -104,7 +104,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: arm64-ci
+          shared-key: arm64-ci-v2
       - run: cargo test
 
   integration-test:
