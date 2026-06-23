@@ -2,21 +2,30 @@ name: Emergency sshd fix (DAK-7089, delete after use)
 on:
   workflow_dispatch: {}
 jobs:
-  fix-sshd:
-    name: Restart sshd on ARM machine
+  fix-firewall:
+    name: Check and fix firewall on ARM machine
     runs-on: [self-hosted, linux, arm64]
     steps:
-      - name: Check and restart ssh
+      - name: Check firewall and open port 22
         run: |
-          echo "=== ssh service status ==="
-          systemctl status ssh --no-pager || true
-          systemctl status openssh-server --no-pager 2>/dev/null || true
-          echo "=== Restarting ssh service ==="
-          systemctl restart ssh || systemctl restart openssh-server || true
-          echo "=== Enabling ssh service for future boots ==="
-          systemctl enable ssh 2>/dev/null || systemctl enable openssh-server 2>/dev/null || true
-          sleep 2
-          echo "=== ssh after restart ==="
-          systemctl status ssh --no-pager | head -10 || true
-          echo "=== Port 22 ==="
-          ss -tlnp | grep ':22' || echo "Port 22 NOT listening after restart attempt"
+          echo "=== UFW status ==="
+          ufw status verbose 2>/dev/null || echo "UFW not installed/available"
+          echo "=== iptables INPUT rules ==="
+          iptables -L INPUT -n --line-numbers 2>/dev/null | head -30 || true
+          echo "=== ip6tables INPUT rules ==="
+          ip6tables -L INPUT -n --line-numbers 2>/dev/null | head -10 || true
+          echo "=== Port 22 listening check ==="
+          ss -tlnp | grep ':22' || echo "Port 22 NOT listening"
+          echo "=== Opening port 22 if UFW is active ==="
+          if ufw status 2>/dev/null | grep -q "Status: active"; then
+            ufw allow ssh
+            echo "UFW: allowed SSH"
+          fi
+          echo "=== iptables: allow port 22 if DROP policy ==="
+          DEFAULT_POLICY=$(iptables -L INPUT --line-numbers -n 2>/dev/null | grep "Chain INPUT" | grep -oE "(DROP|REJECT)" || echo "ACCEPT")
+          if [ -n "$DEFAULT_POLICY" ]; then
+            iptables -I INPUT 1 -p tcp --dport 22 -j ACCEPT 2>/dev/null && echo "iptables: opened port 22" || true
+            ip6tables -I INPUT 1 -p tcp --dport 22 -j ACCEPT 2>/dev/null && echo "ip6tables: opened port 22" || true
+          fi
+          echo "=== Final iptables INPUT ==="
+          iptables -L INPUT -n --line-numbers 2>/dev/null | head -15 || true
