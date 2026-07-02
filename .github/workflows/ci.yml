@@ -72,7 +72,9 @@ jobs:
         with:
           shared-key: arm64-ci-v2
       - name: Purge stale build artifacts
-        run: rm -rf target/
+        run: |
+          rm -rf target/
+          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
       - run: cargo check
 
   clippy:
@@ -87,7 +89,9 @@ jobs:
         with:
           shared-key: arm64-ci-v2
       - name: Purge stale build artifacts
-        run: rm -rf target/
+        run: |
+          rm -rf target/
+          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -110,7 +114,9 @@ jobs:
         with:
           shared-key: arm64-ci-v2
       - name: Purge stale build artifacts
-        run: rm -rf target/
+        run: |
+          rm -rf target/
+          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
       - run: cargo test
 
   integration-test:
@@ -138,7 +144,9 @@ jobs:
           shared-key: integration-test
           cache-all-crates: "true"
       - name: Purge stale build artifacts
-        run: rm -rf target/
+        run: |
+          rm -rf target/
+          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
