@@ -71,19 +71,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale dep-info on lockfile change
+      - name: Purge stale build artifacts and re-extract sources
         run: |
-          LOCK_HASH=$(sha256sum Cargo.lock | cut -d' ' -f1)
-          STORED_HASH=""
-          [ -f target/.cargo-lock-hash ] && STORED_HASH=$(cat target/.cargo-lock-hash)
-          if [ "$LOCK_HASH" != "$STORED_HASH" ]; then
-            echo "::notice::Cargo.lock changed — purging stale dep-info and build artifacts"
-            find target -name '*.d' -delete 2>/dev/null || true
-            rm -rf target/debug/build target/release/build
-            rm -rf target/debug/.fingerprint target/release/.fingerprint
-            mkdir -p target
-            echo "$LOCK_HASH" > target/.cargo-lock-hash
-          fi
+          find target -name '*.d' -delete 2>/dev/null || true
+          rm -rf target/debug/build target/release/build
+          rm -rf target/debug/.fingerprint target/release/.fingerprint
+          rm -rf ~/.cargo/registry/src
+          cargo fetch --locked
       - run: cargo check
 
   clippy:
@@ -97,19 +91,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale dep-info on lockfile change
+      - name: Purge stale build artifacts and re-extract sources
         run: |
-          LOCK_HASH=$(sha256sum Cargo.lock | cut -d' ' -f1)
-          STORED_HASH=""
-          [ -f target/.cargo-lock-hash ] && STORED_HASH=$(cat target/.cargo-lock-hash)
-          if [ "$LOCK_HASH" != "$STORED_HASH" ]; then
-            echo "::notice::Cargo.lock changed — purging stale dep-info and build artifacts"
-            find target -name '*.d' -delete 2>/dev/null || true
-            rm -rf target/debug/build target/release/build
-            rm -rf target/debug/.fingerprint target/release/.fingerprint
-            mkdir -p target
-            echo "$LOCK_HASH" > target/.cargo-lock-hash
-          fi
+          find target -name '*.d' -delete 2>/dev/null || true
+          rm -rf target/debug/build target/release/build
+          rm -rf target/debug/.fingerprint target/release/.fingerprint
+          rm -rf ~/.cargo/registry/src
+          cargo fetch --locked
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -131,19 +119,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale dep-info on lockfile change
+      - name: Purge stale build artifacts and re-extract sources
         run: |
-          LOCK_HASH=$(sha256sum Cargo.lock | cut -d' ' -f1)
-          STORED_HASH=""
-          [ -f target/.cargo-lock-hash ] && STORED_HASH=$(cat target/.cargo-lock-hash)
-          if [ "$LOCK_HASH" != "$STORED_HASH" ]; then
-            echo "::notice::Cargo.lock changed — purging stale dep-info and build artifacts"
-            find target -name '*.d' -delete 2>/dev/null || true
-            rm -rf target/debug/build target/release/build
-            rm -rf target/debug/.fingerprint target/release/.fingerprint
-            mkdir -p target
-            echo "$LOCK_HASH" > target/.cargo-lock-hash
-          fi
+          find target -name '*.d' -delete 2>/dev/null || true
+          rm -rf target/debug/build target/release/build
+          rm -rf target/debug/.fingerprint target/release/.fingerprint
+          rm -rf ~/.cargo/registry/src
+          cargo fetch --locked
       - run: cargo test
 
   integration-test:
@@ -169,19 +151,13 @@ jobs:
         with:
           shared-key: integration-test
           cache-all-crates: "true"
-      - name: Purge stale dep-info on lockfile change
+      - name: Purge stale build artifacts and re-extract sources
         run: |
-          LOCK_HASH=$(sha256sum Cargo.lock | cut -d' ' -f1)
-          STORED_HASH=""
-          [ -f target/.cargo-lock-hash ] && STORED_HASH=$(cat target/.cargo-lock-hash)
-          if [ "$LOCK_HASH" != "$STORED_HASH" ]; then
-            echo "::notice::Cargo.lock changed — purging stale dep-info and build artifacts"
-            find target -name '*.d' -delete 2>/dev/null || true
-            rm -rf target/debug/build target/release/build
-            rm -rf target/debug/.fingerprint target/release/.fingerprint
-            mkdir -p target
-            echo "$LOCK_HASH" > target/.cargo-lock-hash
-          fi
+          find target -name '*.d' -delete 2>/dev/null || true
+          rm -rf target/debug/build target/release/build
+          rm -rf target/debug/.fingerprint target/release/.fingerprint
+          rm -rf ~/.cargo/registry/src
+          cargo fetch --locked
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
