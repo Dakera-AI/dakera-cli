@@ -115,6 +115,7 @@ jobs:
 
   integration-test:
     name: Integration Test (Container)
+    needs: [check, clippy, fmt, test]
     runs-on: [self-hosted, linux, arm64]
     services:
       dakera:
