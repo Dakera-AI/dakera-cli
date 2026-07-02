@@ -71,13 +71,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale build artifacts and re-extract sources
-        run: |
-          find target -name '*.d' -delete 2>/dev/null || true
-          rm -rf target/debug/build target/release/build
-          rm -rf target/debug/.fingerprint target/release/.fingerprint
-          rm -rf ~/.cargo/registry/src
-          cargo fetch --locked
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo check
 
   clippy:
@@ -91,13 +86,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale build artifacts and re-extract sources
-        run: |
-          find target -name '*.d' -delete 2>/dev/null || true
-          rm -rf target/debug/build target/release/build
-          rm -rf target/debug/.fingerprint target/release/.fingerprint
-          rm -rf ~/.cargo/registry/src
-          cargo fetch --locked
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -119,13 +109,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
-      - name: Purge stale build artifacts and re-extract sources
-        run: |
-          find target -name '*.d' -delete 2>/dev/null || true
-          rm -rf target/debug/build target/release/build
-          rm -rf target/debug/.fingerprint target/release/.fingerprint
-          rm -rf ~/.cargo/registry/src
-          cargo fetch --locked
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo test
 
   integration-test:
@@ -151,13 +136,8 @@ jobs:
         with:
           shared-key: integration-test
           cache-all-crates: "true"
-      - name: Purge stale build artifacts and re-extract sources
-        run: |
-          find target -name '*.d' -delete 2>/dev/null || true
-          rm -rf target/debug/build target/release/build
-          rm -rf target/debug/.fingerprint target/release/.fingerprint
-          rm -rf ~/.cargo/registry/src
-          cargo fetch --locked
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
