@@ -71,6 +71,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo check
 
   clippy:
@@ -84,6 +86,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -105,10 +109,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: arm64-ci-v2
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - run: cargo test
 
   integration-test:
     name: Integration Test (Container)
+    needs: [check, clippy, fmt, test]
     runs-on: [self-hosted, linux, arm64]
     services:
       dakera:
@@ -130,6 +137,8 @@ jobs:
         with:
           shared-key: integration-test
           cache-all-crates: "true"
+      - name: Purge stale build artifacts
+        run: rm -rf target/
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
