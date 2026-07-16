@@ -34,7 +34,11 @@ jobs:
         shell: bash
         run: |
           cargo dist plan --tag=${{ github.ref_name }} --output-format=json > plan.json
-          echo "manifest=$(cat plan.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo 'manifest<<DIST_EOF'
+            cat plan.json
+            echo 'DIST_EOF'
+          } >> "$GITHUB_OUTPUT"
           cat plan.json
       - name: Upload dist-manifest.json
         uses: actions/upload-artifact@v7
