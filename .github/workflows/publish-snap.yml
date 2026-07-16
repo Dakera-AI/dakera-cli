@@ -15,6 +15,8 @@ jobs:
   snap:
     name: Build and publish Snap package
     runs-on: ubuntu-latest
+    env:
+      HAS_SNAP_CREDS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -32,9 +34,16 @@ jobs:
         uses: snapcore/action-build@v1
 
       - name: Publish to Snap Store
+        if: env.HAS_SNAP_CREDS == 'true'
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.build.outputs.snap }}
           release: ${{ github.event.inputs.channel || 'stable' }}
+
+      - name: Skip notice — SNAPCRAFT_STORE_CREDENTIALS not set
+        if: env.HAS_SNAP_CREDS != 'true'
+        run: |
+          echo "::warning::Snap build succeeded but publish skipped — SNAPCRAFT_STORE_CREDENTIALS secret is empty."
+          echo "To enable: run 'snapcraft export-login --snaps dk --channels stable' and set output as repo secret."
