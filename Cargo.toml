@@ -1,12 +1,12 @@
 [package]
-name = "dakera-cli"
+name = "dk"
 version = "0.7.0"
 edition = "2021"
 license = "MIT"
 description = "Command-line interface for Dakera AI Agent Memory Platform"
 repository = "https://github.com/dakera-ai/dakera-cli"
 homepage = "https://dakera.ai"
-documentation = "https://docs.rs/dakera-cli"
+documentation = "https://docs.rs/dk"
 keywords = ["agent-memory", "vector-search", "knowledge-graph", "ai-agents", "mcp"]
 categories = ["database", "science", "command-line-utilities"]
 
