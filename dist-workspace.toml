@@ -13,6 +13,9 @@ targets = [
   "x86_64-pc-windows-msvc",
 ]
 pr-run-mode = "plan"
+# DAK-7448: cargo-dist 0.26.0 wants to regenerate release.yml (comment format changed),
+# but the existing workflow is functionally correct. Skip the staleness check.
+allow-dirty = ["ci"]
 publish-jobs = ["homebrew"]
 install-path = "CARGO_HOME"
 tap = "dakera-ai/homebrew-tap"
