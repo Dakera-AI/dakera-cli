@@ -84,3 +84,7 @@ pkg-fmt = "tgz"
 target = "x86_64-pc-windows-msvc"
 pkg-url = "{ repo }/releases/download/v{ version }/dk.exe"
 pkg-fmt = "bin"
+
+# Required by cargo-dist v0.26.0 dist build command
+[profile.dist]
+inherits = "release"
