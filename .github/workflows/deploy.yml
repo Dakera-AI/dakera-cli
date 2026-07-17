@@ -11,8 +11,8 @@ jobs:
   deploy-binary:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    # Only deploy when the Release workflow succeeded
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only deploy when the Release workflow succeeded on a real version tag (not a PR/branch run)
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     steps:
       - name: Download Linux binary from published release asset
         env:

@@ -1,6 +1,6 @@
 [package]
 name = "dk"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 license = "MIT"
 description = "Command-line interface for Dakera AI Agent Memory Platform"
