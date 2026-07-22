@@ -65,6 +65,11 @@ jobs:
   check:
     name: Check
     runs-on: [self-hosted, linux, arm64]
+    # Serialize ARM cargo-build jobs org-wide (cli-arm, mcp-arm, dakera-arm share the host).
+    # Concurrent builds race on ~/.cargo/registry/src extraction (DAK-7483).
+    concurrency:
+      group: arm-cargo-host
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -74,12 +79,15 @@ jobs:
       - name: Purge stale build artifacts
         run: |
           rm -rf target/
-          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
+          rm -rf ~/.cargo/registry/src/
       - run: cargo check
 
   clippy:
     name: Clippy
     runs-on: [self-hosted, linux, arm64]
+    concurrency:
+      group: arm-cargo-host
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -91,7 +99,7 @@ jobs:
       - name: Purge stale build artifacts
         run: |
           rm -rf target/
-          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
+          rm -rf ~/.cargo/registry/src/
       - run: cargo clippy -- -D warnings
 
   fmt:
@@ -107,6 +115,9 @@ jobs:
   test:
     name: Test
     runs-on: [self-hosted, linux, arm64]
+    concurrency:
+      group: arm-cargo-host
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -116,13 +127,16 @@ jobs:
       - name: Purge stale build artifacts
         run: |
           rm -rf target/
-          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
+          rm -rf ~/.cargo/registry/src/
       - run: cargo test
 
   integration-test:
     name: Integration Test (Container)
     needs: [check, clippy, fmt, test]
     runs-on: [self-hosted, linux, arm64]
+    concurrency:
+      group: arm-cargo-host
+      cancel-in-progress: false
     services:
       dakera:
         image: ghcr.io/dakera-ai/dakera:latest
@@ -146,7 +160,7 @@ jobs:
       - name: Purge stale build artifacts
         run: |
           rm -rf target/
-          rm -rf ~/.cargo/registry/src/aws-lc-sys-*
+          rm -rf ~/.cargo/registry/src/
       - name: Build dk binary
         run: cargo build --release
       - name: Wait for dakera server
