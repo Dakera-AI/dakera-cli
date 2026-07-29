@@ -25,6 +25,7 @@ pub(crate) fn authed_client() -> dakera_client::reqwest::Client {
         }
     }
     dakera_client::reqwest::Client::builder()
+        .user_agent(format!("dakera-cli/{}", env!("CARGO_PKG_VERSION")))
         .default_headers(headers)
         .build()
         .unwrap_or_default()
