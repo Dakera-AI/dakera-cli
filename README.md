@@ -4,7 +4,7 @@
 
 Command-line interface for [Dakera AI](https://dakera.ai) — inspect and manage a Dakera memory instance from the terminal.
 
-> The Dakera memory engine scores **88.2% on LoCoMo** (1,540 questions, standard eval) — [benchmark details](https://dakera.ai/benchmark)
+> The Dakera memory engine scores **88.2% Recall@20 on LoCoMo** (1,540 questions · LLM-judge scored) — [benchmark details](https://dakera.ai/benchmark)
 
 ---
 
@@ -403,4 +403,4 @@ Scripts can check `$?` after each command.
 
 **[dakera.ai](https://dakera.ai)** · [Documentation](https://dakera.ai/docs) · [Request Early Access](https://dakera.ai#cta)
 
-<sub>Part of the Dakera AI open-source ecosystem. Built with Rust. Self-hosted. Zero dependencies.</sub>
+<sub>Part of the Dakera AI open-core ecosystem. Built with Rust. Self-hosted. Zero dependencies.</sub>
