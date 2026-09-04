@@ -1,24 +1,40 @@
 name: Deploy Binary
 
-# Triggered after the Release workflow completes successfully.
+# Triggered after the Release workflow completes successfully, or manually via workflow_dispatch.
 # Downloads the Linux x86_64 binary from the Release artifacts and deploys it to production.
 on:
   workflow_run:
     workflows: [Release]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release tag to deploy (e.g. v0.7.1)'
+        required: true
+        type: string
 
 jobs:
   deploy-binary:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    # Only deploy when the Release workflow succeeded on a real version tag (not a PR/branch run)
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    # On workflow_run: only deploy when Release succeeded on a real version tag.
+    # On workflow_dispatch: always run (manual trigger implies intentional deploy).
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v')) }}
     steps:
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.version_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download Linux binary from published release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.workflow_run.head_branch }}"
+          TAG="${{ steps.tag.outputs.tag }}"
           echo "Downloading dk-x86_64-unknown-linux-gnu.tar.gz from release $TAG"
           gh release download "$TAG" --repo "${{ github.repository }}" \
             --pattern 'dk-x86_64-unknown-linux-gnu.tar.gz' --clobber
@@ -46,4 +62,4 @@ jobs:
           script: |
             chmod +x /tmp/dk
             mv /tmp/dk /home/dakera/.local/bin/dk
-            echo "✅ dk deployed from release ${{ github.event.workflow_run.head_branch }}"
+            echo "✅ dk deployed from release ${{ steps.tag.outputs.tag }}"
