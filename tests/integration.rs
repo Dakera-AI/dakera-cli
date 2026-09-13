@@ -5,7 +5,7 @@
 //!
 //! Container integration tests (marked `#[ignore]`) require a running dakera
 //! server. Run them with:
-//!   DAKERA_TEST_URL=http://localhost:3300 DAKERA_TEST_KEY=test-key \
+//!   DAKERA_TEST_URL=http://localhost:3000 DAKERA_TEST_KEY=test-key \
 //!   cargo test --test integration -- --ignored
 //!
 //! Commands covered (httpmock):
@@ -1177,7 +1177,7 @@ fn container_dk(url: &str, key: &str) -> Command {
 }
 
 fn container_url() -> String {
-    std::env::var("DAKERA_TEST_URL").unwrap_or_else(|_| "http://localhost:3300".to_string())
+    std::env::var("DAKERA_TEST_URL").unwrap_or_else(|_| "http://localhost:3000".to_string())
 }
 
 fn container_key() -> String {
