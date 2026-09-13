@@ -4,7 +4,7 @@
 
 Command-line interface for [Dakera AI](https://dakera.ai) — inspect and manage a Dakera memory instance from the terminal.
 
-> The Dakera memory engine scores **88.2% Recall@20 on LoCoMo** (1,540 questions · LLM-judge scored) — [benchmark details](https://dakera.ai/benchmark)
+> The Dakera memory engine scores **88.2% Recall@20 on LoCoMo** (1,536 evaluated questions · LLM-judged retrieval recall) — [benchmark details](https://dakera.ai/benchmark)
 
 ---
 
