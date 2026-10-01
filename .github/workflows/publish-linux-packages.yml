@@ -5,6 +5,20 @@ on:
     tags:
       - '*-?[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to rebuild and republish (for example v0.8.0). Defaults to the selected ref.'
+        required: false
+        type: string
+      rpm_only:
+        description: 'Only republish the RPM repository (skip the APT repository)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  RELEASE_REF: ${{ inputs.tag || github.ref }}
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
   group: publish-linux-packages-${{ github.ref }}
@@ -13,9 +27,12 @@ concurrency:
 jobs:
   build-deb:
     name: Build .deb package
+    if: ${{ !inputs.rpm_only }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_REF }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v6
         with:
@@ -41,6 +58,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_REF }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v6
         with:
@@ -65,6 +84,7 @@ jobs:
 
   publish-apt:
     name: Publish to APT repository
+    if: ${{ !inputs.rpm_only }}
     needs: build-deb
     runs-on: ubuntu-22.04
     steps:
@@ -134,7 +154,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            VERSION="${{ github.ref_name }}"
+            VERSION="${RELEASE_TAG}"
             git commit -m "feat: add dk ${VERSION} packages"
             git push
           fi
@@ -151,6 +171,7 @@ jobs:
           path: ./rpms
 
       - name: Import GPG signing key
+        id: import_gpg
         uses: crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -162,10 +183,12 @@ jobs:
           token: ${{ secrets.APT_REPO_TOKEN }}
           path: rpm-repo
 
-      - name: Install createrepo_c
-        run: sudo apt-get install -y createrepo-c
+      - name: Install createrepo_c and rpm tooling
+        run: sudo apt-get install -y createrepo-c rpm
 
-      - name: Add package and regenerate metadata
+      - name: Sign packages, regenerate and sign metadata
+        env:
+          GPG_FPR: ${{ steps.import_gpg.outputs.fingerprint }}
         run: |
           set -euo pipefail
           RPM=$(ls ./rpms/*.rpm | head -1)
@@ -173,6 +196,30 @@ jobs:
 
           mkdir -p rpm-repo/packages/
           cp "$RPM" rpm-repo/packages/
+
+          # Non-interactive rpm signing set-up (the same key as the APT repo).
+          cat > "$HOME/.rpmmacros" <<EOF
+          %_gpg_name hello@dakera.ai
+          %__gpg /usr/bin/gpg
+          %_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback
+          EOF
+          sed -i 's/^ *//' "$HOME/.rpmmacros"
+
+          # Publish the public key that users import.
+          gpg --armor --export "$GPG_FPR" > rpm-repo/RPM-GPG-KEY-dakera
+
+          # Sign every package in the repository BEFORE generating metadata,
+          # so that gpgcheck=1 works for all versions that can be installed.
+          rpmsign --addsign rpm-repo/packages/*.rpm
+
+          # Verify with a clean rpm database that only trusts the published key.
+          DBPATH=$(mktemp -d)
+          rpm --dbpath "$DBPATH" --import rpm-repo/RPM-GPG-KEY-dakera
+          for f in rpm-repo/packages/*.rpm; do
+            out=$(rpm --dbpath "$DBPATH" -K "$f")
+            echo "$out"
+            echo "$out" | grep -q "digests signatures OK"
+          done
 
           # Regenerate all repository metadata
           createrepo_c --update rpm-repo/
@@ -192,7 +239,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            VERSION="${{ github.ref_name }}"
+            VERSION="${RELEASE_TAG}"
             git commit -m "feat: add dk ${VERSION} packages"
             git push
           fi
