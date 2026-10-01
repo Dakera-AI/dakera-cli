@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-01
+
+Support for Dakera server v0.12.0. Compatible with v0.11.108 and v0.12.0 servers;
+the commands below that call v0.12 routes say so when run against v0.11.
+
+### Added
+
+- **`dk capabilities`**: `GET /v1/capabilities` as a table (active model, search
+  mode, scoring strategy, query languages, opt-in features on/off). Exits 3 with a
+  clear message on a server that predates v0.12.
+- **`dk health ready` / `dk health live`**: the readiness and liveness probes.
+  `dk health` and `dk health --detailed` now read the JSON directly: a starting
+  server (`503` + `Retry-After`) is reported as such (exit 6) instead of healthy,
+  and the `degraded`, `config_warnings` and `embed_migration` fields are shown.
+- **`dk attachment upload|list|download|delete|transcribe|index|job`**: the v0.12
+  attachment, speech-to-text and image-index routes (opt-in on the server:
+  `DAKERA_ATTACHMENTS`, `DAKERA_VISION`), with `--wait` for the background jobs.
+- **`dk admin embed-migration`**: `GET /admin/reembed/migration`.
+- **`dk admin encryption-status|encryption-rotate|encryption-reseal`**: the v0.12
+  keyring; rotation of one namespace (`-n`) or of everything, the new key read from
+  an environment variable (`--new-key-env`), never from the command line.
+- **`dk admin backup-get|backup-download|backup-upload|backup-restore-status|backup-schedule`**,
+  and options on `backup-create` (`--name`, `--type`, `-n`, `--encrypt`,
+  `--compression`, `--wait`) and `backup-restore` (`-n`, `--overwrite --yes`, `--wait`).
+- **Permission and error messages**: every non-2xx answer keeps the server's JSON
+  error body. A `403` says whether the key is pinned to namespaces (v0.12: `403` on
+  node-wide routes) or lacks `super_admin` (backup download, upload, restore); a
+  `413`, `501` and `503` say what to change or when to retry (`Retry-After`).
+  With `--format json` the error gains `http_status`, `server_code`, `details`,
+  `retry_after_secs`.
+- README: what is new, compatibility with v0.11.108 and v0.12.0, permissions, and
+  the server-side `dakera downgrade` and `dakera --check-config` commands.
+
+### Changed
+
+- Exit codes follow the HTTP status of an error answer: `401`/`403` exit 4;
+  `400`/`409`/`413`/`415`/`422` exit 5; every 5xx (including `501` and `503`) exits 6.
+- Shell completions list the new commands.
+
+### Fixed
+
+- `dk admin backup-create` sent `{"include_data": ...}` and no `name`, which the
+  server requires, so it could not succeed; it now sends `name` (default
+  `dk-backup-<unix time>`). The `--no-data` flag, which the server never read, is gone.
+- `dk admin quotas-set` called `PUT /admin/quotas`, a route that does not exist; it
+  now calls `/admin/quotas/{namespace}` (`-n`) or `/admin/quotas/default`.
+- `dk admin` commands printed their success line before checking the answer, so a
+  refused call showed a green check and then the error.
+
 ## [0.6.0] - 2026-05-20
 
 ### Added

@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "dk"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "assert_cmd",

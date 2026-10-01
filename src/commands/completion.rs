@@ -9,7 +9,7 @@ use crate::output;
 
 /// All top-level `dk` subcommands (used in every shell script).
 const TOP_LEVEL_CMDS: &str =
-    "init health namespace vector index ops memory session agent knowledge analytics admin keys config completion";
+    "init health capabilities attachment namespace vector index ops memory session agent knowledge analytics admin keys config completion";
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
@@ -128,8 +128,14 @@ _dk() {{
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
                 "cluster-status cluster-nodes optimize index-stats rebuild-indexes \
                  cache-stats cache-clear config-get config-set quotas-get quotas-set \
-                 slow-queries backup-create backup-list backup-restore backup-delete configure-ttl" \
+                 slow-queries backup-create backup-list backup-get backup-download backup-upload \
+                 backup-restore backup-restore-status backup-schedule backup-delete configure-ttl \
+                 encryption-status encryption-rotate encryption-reseal embed-migration" \
                 -- "$cur"))
+            ;;
+        attachment)
+            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
+                "upload list download delete transcribe index job" -- "$cur"))
             ;;
         keys)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
@@ -138,7 +144,10 @@ _dk() {{
         completion)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
             ;;
-        health|init|config)
+        health)
+            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "ready live --detailed" -- "$cur"))
+            ;;
+        init|config|capabilities)
             # no subcommands
             ;;
     esac
@@ -198,6 +207,8 @@ _dk() {
             local commands=(
                 'init:Interactive setup wizard'
                 'health:Check server health'
+                'capabilities:Show what the server supports'
+                'attachment:Attachments: upload, transcribe, index'
                 'namespace:Manage namespaces'
                 'vector:Vector operations'
                 'index:Index management'
@@ -348,8 +359,17 @@ _dk() {
                         'slow-queries:List slow queries'
                         'backup-create:Create backup'
                         'backup-list:List backups'
+                        'backup-get:Show a backup'
+                        'backup-download:Download a backup bundle'
+                        'backup-upload:Upload a backup bundle'
                         'backup-restore:Restore from backup'
+                        'backup-restore-status:Show a restore'
+                        'backup-schedule:Show or set the backup schedule'
                         'backup-delete:Delete backup'
+                        'encryption-status:Show the encryption keyring'
+                        'encryption-rotate:Rotate the encryption key'
+                        'encryption-reseal:Run a re-seal pass'
+                        'embed-migration:Show the background re-embed'
                         'configure-ttl:Configure TTL for namespace'
                     )
                     _arguments '1: :->subcmd' \
@@ -374,7 +394,26 @@ _dk() {
                         '--install[Install completion script]'
                     ;;
                 health)
-                    _arguments '--detailed[Show detailed health info]'
+                    local hl_cmds=(
+                        'ready:Readiness probe'
+                        'live:Liveness probe'
+                    )
+                    _arguments '1: :->subcmd' \
+                        '--detailed[Show detailed health info]'
+                    [[ $state == subcmd ]] && _describe 'health subcommand' hl_cmds
+                    ;;
+                attachment)
+                    local at_cmds=(
+                        'upload:Upload a file'
+                        'list:List attachments'
+                        'download:Download an attachment'
+                        'delete:Delete an attachment'
+                        'transcribe:Transcribe audio into a memory'
+                        'index:Index an image as a visual memory'
+                        'job:Show a transcription or index job'
+                    )
+                    _arguments '1: :->subcmd'
+                    [[ $state == subcmd ]] && _describe 'attachment subcommand' at_cmds
                     ;;
             esac
             ;;
@@ -393,8 +432,8 @@ fn fish_script() -> &'static str {
 
 function __dk_no_subcommand
     for i in (commandline -opc)
-        if contains -- $i init health namespace vector index ops memory session agent \
-                       knowledge analytics admin keys config completion
+        if contains -- $i init health capabilities attachment namespace vector index ops \
+                       memory session agent knowledge analytics admin keys config completion
             return 1
         end
     end
@@ -429,6 +468,8 @@ complete -c dk -s v -l verbose   -d 'Enable verbose output'
 # Top-level subcommands
 complete -c dk -f -n '__dk_no_subcommand' -a 'init'       -d 'Interactive setup wizard'
 complete -c dk -f -n '__dk_no_subcommand' -a 'health'     -d 'Check server health'
+complete -c dk -f -n '__dk_no_subcommand' -a 'capabilities' -d 'Show what the server supports'
+complete -c dk -f -n '__dk_no_subcommand' -a 'attachment' -d 'Attachments: upload, transcribe, index'
 complete -c dk -f -n '__dk_no_subcommand' -a 'namespace'  -d 'Manage namespaces'
 complete -c dk -f -n '__dk_no_subcommand' -a 'vector'     -d 'Vector operations'
 complete -c dk -f -n '__dk_no_subcommand' -a 'index'      -d 'Index management'
@@ -531,7 +572,25 @@ complete -c dk -f -n '__dk_using_subcommand admin' -a 'quotas-set'      -d 'Set 
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'slow-queries'    -d 'List slow queries'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-create'   -d 'Create backup'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-list'     -d 'List backups'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-get'      -d 'Show a backup'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-download' -d 'Download a backup bundle'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-upload'   -d 'Upload a backup bundle'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-restore'  -d 'Restore from backup'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-restore-status' -d 'Show a restore'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-schedule' -d 'Show or set the backup schedule'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-status' -d 'Show the encryption keyring'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-rotate' -d 'Rotate the encryption key'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-reseal' -d 'Run a re-seal pass'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'embed-migration' -d 'Show the background re-embed'
+complete -c dk -f -n '__dk_using_subcommand health' -a 'ready' -d 'Readiness probe'
+complete -c dk -f -n '__dk_using_subcommand health' -a 'live'  -d 'Liveness probe'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'upload'     -d 'Upload a file'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'list'       -d 'List attachments'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'download'   -d 'Download an attachment'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'delete'     -d 'Delete an attachment'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'transcribe' -d 'Transcribe audio into a memory'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'index'      -d 'Index an image as a visual memory'
+complete -c dk -f -n '__dk_using_subcommand attachment' -a 'job'        -d 'Show a transcription or index job'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-delete'   -d 'Delete backup'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'configure-ttl'   -d 'Configure TTL for namespace'
 complete -c dk -n '__dk_using_subcommand admin' -l namespace -s n -d 'Namespace' -r -a '(__dk_namespaces)'

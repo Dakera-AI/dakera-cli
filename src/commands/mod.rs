@@ -1,7 +1,10 @@
 //! CLI command implementations
 
 pub mod admin;
+pub mod admin_v012;
 pub mod agent;
+pub mod attachment;
+pub mod capabilities;
 pub mod completion;
 pub mod config;
 pub mod health;
