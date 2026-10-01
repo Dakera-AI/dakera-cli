@@ -2020,3 +2020,201 @@ fn sdk_command_404_exits_3() {
         .failure()
         .code(3);
 }
+
+// ---------------------------------------------------------------------------
+// knowledge: the v0.12.0 server's request and answer shapes (raw REST)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn knowledge_graph_sends_the_seed_and_prints_related() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/knowledge/graph")
+            .json_body(json!({
+                "agent_id": "bot", "memory_id": "mem-1", "depth": 2
+            }));
+        then.status(200).json_body(json!({
+            "root": {
+                "memory": {"id": "mem-1", "content": "Anna leads Alpha", "memory_type": "episodic",
+                           "agent_id": "bot", "importance": 0.5, "tags": [], "created_at": 1},
+                "similarity": 1.0,
+                "related": [{"memory_id": "mem-2", "similarity": 0.91, "shared_tags": ["alpha"]}]
+            },
+            "total_nodes": 2
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "knowledge",
+        "graph",
+        "bot",
+        "--memory-id",
+        "mem-1",
+        "--depth",
+        "2",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Knowledge graph from mem-1: 2 nodes",
+    ))
+    .stdout(predicate::str::contains("mem-2"))
+    .stdout(predicate::str::contains("alpha"));
+    m.assert();
+}
+
+#[test]
+fn knowledge_full_graph_reads_the_server_answer() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/knowledge/graph/full")
+            .json_body(json!({"agent_id": "bot", "max_nodes": 50, "max_edges_per_node": 3}));
+        then.status(200).json_body(json!({
+            "nodes": [
+                {"id": "mem-1", "content": "a", "memory_type": "Episodic", "importance": 0.5,
+                 "tags": [], "created_at": "1", "cluster_id": 0, "centrality": 1.0},
+                {"id": "mem-2", "content": "b", "memory_type": "Episodic", "importance": 0.5,
+                 "tags": [], "created_at": "1", "cluster_id": 0, "centrality": 1.0}
+            ],
+            "edges": [{"source": "mem-1", "target": "mem-2", "similarity": 0.9, "shared_tags": []}],
+            "clusters": [{"id": 0, "node_count": 2, "top_tags": ["x"], "avg_importance": 0.5}],
+            "stats": {"total_memories": 2, "included_memories": 2, "total_edges": 1,
+                      "cluster_count": 1, "density": 1.0, "hub_memory_id": "mem-2"}
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "knowledge",
+        "full-graph",
+        "bot",
+        "--max-nodes",
+        "50",
+        "--max-edges",
+        "3",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("2 nodes, 1 edges"))
+    .stdout(predicate::str::contains("Cluster 0: 2 nodes"))
+    .stdout(predicate::str::contains("Hub memory: mem-2"));
+    m.assert();
+}
+
+#[test]
+fn knowledge_summarize_sends_ids_and_prints_the_new_memory() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/knowledge/summarize")
+            .json_body(json!({
+                "agent_id": "bot", "memory_ids": ["m1", "m2"], "target_type": "semantic"
+            }));
+        then.status(200).json_body(json!({
+            "summary_memory": {"id": "mem-sum", "content": "Bob fixed and shipped the login bug",
+                               "memory_type": "semantic", "agent_id": "bot", "importance": 0.6,
+                               "tags": [], "created_at": 1},
+            "source_count": 2
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "knowledge",
+        "summarize",
+        "bot",
+        "--memory-ids",
+        "m1, m2",
+        "--target-type",
+        "semantic",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Summarized 2 memories into mem-sum",
+    ))
+    .stdout(predicate::str::contains("shipped the login bug"));
+    m.assert();
+}
+
+#[test]
+fn knowledge_summarize_with_one_id_fails_before_the_request() {
+    dk().args([
+        "--url",
+        "http://127.0.0.1:1",
+        "knowledge",
+        "summarize",
+        "bot",
+        "--memory-ids",
+        "m1",
+    ])
+    .assert()
+    .failure()
+    .code(5)
+    .stderr(predicate::str::contains("at least two"));
+}
+
+#[test]
+fn knowledge_deduplicate_dry_run_reads_groups() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/knowledge/deduplicate")
+            .json_body(json!({"agent_id": "bot", "dry_run": true, "threshold": 0.75}));
+        then.status(200).json_body(json!({
+            "groups": [{"canonical_id": "m1", "duplicate_ids": ["m2", "m3"], "avg_similarity": 0.97}],
+            "duplicates_found": 2,
+            "duplicates_merged": 0
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "knowledge",
+        "deduplicate",
+        "bot",
+        "--threshold",
+        "0.75",
+        "--dry-run",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "[dry-run] Found 2 duplicates in 1 groups",
+    ))
+    .stdout(predicate::str::contains("m2, m3"));
+    m.assert();
+}
+
+#[test]
+fn index_fulltext_stats_prints_the_server_answer() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(GET).path("/v1/namespaces/ns-1/fulltext/stats");
+        then.status(200).json_body(json!({
+            "document_count": 2, "unique_terms": 5, "avg_doc_length": 4.5
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "--format",
+        "json",
+        "index",
+        "fulltext-stats",
+        "--namespace",
+        "ns-1",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("\"unique_terms\": 5"));
+    m.assert();
+}

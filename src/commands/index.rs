@@ -2,8 +2,10 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
+use dakera_client::reqwest::Method;
 use dakera_client::DakeraClient;
 
+use crate::api;
 use crate::context::Context;
 use crate::output;
 
@@ -49,16 +51,11 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
         Some(("fulltext-stats", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let t = ctx.log_request(
-                "GET",
-                &format!("/v1/namespaces/{}/fulltext/stats", namespace),
-            );
-            let stats = client.fulltext_stats(namespace).await;
-            match &stats {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            output::print_item(&stats?, ctx.format);
+            // Raw REST: the server answers {document_count, unique_terms,
+            // avg_doc_length}, which dakera-client 0.12.0 fails to decode.
+            let path = format!("/v1/namespaces/{}/fulltext/stats", api::segment(namespace));
+            let stats = api::request_json_logged(ctx, Method::GET, &path, None).await?;
+            output::print_item(&stats, ctx.format);
         }
 
         Some(("rebuild", sub_matches)) => {

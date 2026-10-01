@@ -920,7 +920,8 @@ pub fn build_knowledge_command() -> Command {
                     Arg::new("memory-id")
                         .short('m')
                         .long("memory-id")
-                        .help("Seed memory ID"),
+                        .required(true)
+                        .help("Seed memory ID (the server builds the graph around it)"),
                 )
                 .arg(
                     Arg::new("depth")
@@ -969,12 +970,15 @@ pub fn build_knowledge_command() -> Command {
         )
         .subcommand(
             Command::new("summarize")
-                .about("Summarize agent memories")
+                .about(
+                    "Summarize a group of memories into a new memory (the server always stores it)",
+                )
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
                 .arg(
                     Arg::new("memory-ids")
                         .long("memory-ids")
-                        .help("Comma-separated memory IDs to summarize"),
+                        .required(true)
+                        .help("Comma-separated memory IDs to summarize (at least two)"),
                 )
                 .arg(
                     Arg::new("target-type")
@@ -982,12 +986,6 @@ pub fn build_knowledge_command() -> Command {
                         .long("target-type")
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("Target memory type for the summary"),
-                )
-                .arg(
-                    Arg::new("dry-run")
-                        .long("dry-run")
-                        .action(ArgAction::SetTrue)
-                        .help("Preview summarization without applying changes"),
                 ),
         )
         .subcommand(

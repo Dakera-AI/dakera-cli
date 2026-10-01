@@ -80,6 +80,19 @@ the commands below that call v0.12 routes say so when run against v0.11.
   refused call showed a green check and then the error.
 - The SDK-backed commands (`dk memory`, `dk session`, ...) now get the same exit codes
   by status as the others: a `400` exited 6 and a `501` exited 1.
+- **`dk knowledge graph|full-graph|summarize|deduplicate` and `dk index fulltext-stats`
+  failed on every call** against v0.11.108 and v0.12.0 (`dakera-client` does not match
+  these routes: "error decoding response body", or a 422). They now call the REST API
+  with the server's request and answer shapes:
+  - `dk knowledge graph` needs `--memory-id` (the server builds the graph around a seed
+    memory) and prints the seed and its related memories.
+  - `dk knowledge summarize` needs `--memory-ids` with at least two ids, prints the new
+    summary memory, and **`--dry-run` is removed**: the server has no dry run and always
+    stores the summary, so the flag announced a preview while writing.
+  - `dk knowledge full-graph` prints clusters and the hub memory; `deduplicate` prints
+    each group's canonical id, duplicates and similarity.
+  The container tests for these commands accepted the failures ("response schema may
+  differ"); they now assert success against the real server.
 
 ## [0.6.0] - 2026-05-20
 
