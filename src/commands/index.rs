@@ -49,7 +49,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
         Some(("fulltext-stats", sub_matches)) => {
             let namespace = sub_matches.get_one::<String>("namespace").unwrap();
-            let t = ctx.log_request("GET", &format!("/v1/{}/fulltext/stats", namespace));
+            let t = ctx.log_request("GET", &format!("/v1/namespaces/{}/fulltext/stats", namespace));
             let stats = client.fulltext_stats(namespace).await;
             match &stats {
                 Ok(_) => ctx.log_response(t, "200 OK"),

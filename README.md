@@ -105,7 +105,7 @@ dk memory store my-agent "The user prefers concise responses" --importance 0.8
 dk memory recall my-agent "user preferences" --top-k 5
 
 # 5. Full-text BM25 search
-dk text search "user preferences"
+dk text search "user preferences" --namespace default
 ```
 
 ---
@@ -277,8 +277,8 @@ dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
 Full-text (BM25) search across memories.
 
 ```bash
-# Search all namespaces
-dk text search "machine learning"
+# Search one namespace (the server has no cross-namespace full-text route)
+dk text search "machine learning" --namespace default
 
 # Search within a specific namespace
 dk text search "temporal reasoning" --namespace my-ns --limit 20

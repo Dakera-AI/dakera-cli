@@ -479,10 +479,11 @@ fn memory_update_success_reports_memory_id() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(PUT)
-            .path("/v1/agents/test-agent/memories/mem-001");
+            .path("/v1/memory/update/mem-001")
+            .query_param("agent_id", "test-agent");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "memory_id": "mem-001" }));
+            .json_body(json!({ "id": "mem-001" }));
     });
 
     dk().args([
@@ -539,11 +540,14 @@ fn memory_consolidate_dry_run_shows_preview() {
 fn memory_feedback_submits_and_reports_status() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/v1/agents/test-agent/memories/feedback");
+        when.method(POST).path("/v1/memory/feedback");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "status": "accepted", "updated_importance": 0.75 }));
+            .json_body(json!({
+                "memory_id": "mem-001",
+                "new_importance": 0.75,
+                "signal": "upvote"
+            }));
     });
 
     dk().args([
@@ -553,7 +557,7 @@ fn memory_feedback_submits_and_reports_status() {
         "feedback",
         "test-agent",
         "mem-001",
-        "Very relevant",
+        "upvote",
     ])
     .assert()
     .success()
@@ -1603,7 +1607,7 @@ fn container_text_search() {
 
     // Accept success or not-found — endpoint may not be in the current server version
     container_dk(&url, &key)
-        .args(["text", "search", "fulltext search"])
+        .args(["text", "search", "fulltext search", "--namespace", "text-search-agent"])
         .assert()
         .code(predicate::in_iter([0i32, 3]));
 }
@@ -1645,7 +1649,7 @@ fn container_keys_list() {
 fn text_search_returns_results() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/fulltext/search");
+        when.method(POST).path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -1653,15 +1657,21 @@ fn text_search_returns_results() {
                     {
                         "id": "mem-001",
                         "score": 0.95,
-                        "content": "BM25 search result content",
-                        "namespace": "default"
+                        "metadata": { "content": "BM25 search result content" }
                     }
-                ],
-                "total": 1
+                ]
             }));
     });
 
-    dk().args(["--url", &server.base_url(), "text", "search", "my query"])
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "text",
+        "search",
+        "my query",
+        "--namespace",
+        "default",
+    ])
         .assert()
         .success()
         .stdout(predicate::str::contains("1 result"));
@@ -1671,13 +1681,21 @@ fn text_search_returns_results() {
 fn text_search_empty_results_shows_no_results_message() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/fulltext/search");
+        when.method(POST).path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "results": [], "total": 0 }));
+            .json_body(json!({ "results": [] }));
     });
 
-    dk().args(["--url", &server.base_url(), "text", "search", "no match"])
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "text",
+        "search",
+        "no match",
+        "--namespace",
+        "default",
+    ])
         .assert()
         .success()
         .stdout(predicate::str::contains("No results found"));
@@ -1687,7 +1705,7 @@ fn text_search_empty_results_shows_no_results_message() {
 fn memory_batch_forget_returns_deleted_count() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/memories/forget/batch");
+        when.method(DELETE).path("/v1/memories/forget/batch");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "deleted_count": 5 }));
@@ -1699,6 +1717,8 @@ fn memory_batch_forget_returns_deleted_count() {
         "memory",
         "batch-forget",
         "test-agent",
+        "--min-importance",
+        "0.5",
     ])
     .assert()
     .success()
@@ -1709,10 +1729,15 @@ fn memory_batch_forget_returns_deleted_count() {
 fn memory_batch_forget_dry_run_shows_preview() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/memories/forget/batch");
+        when.method(POST).path("/v1/memories/recall/batch");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "deleted_count": 3 }));
+            .json_body(json!({
+                "memories": [],
+                "total": 10,
+                "filtered": 3,
+                "truncated": true
+            }));
     });
 
     dk().args([
@@ -1721,6 +1746,8 @@ fn memory_batch_forget_dry_run_shows_preview() {
         "memory",
         "batch-forget",
         "test-agent",
+        "--min-importance",
+        "0.5",
         "--dry-run",
     ])
     .assert()

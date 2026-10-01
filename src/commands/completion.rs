@@ -129,7 +129,7 @@ _dk() {{
                 "cluster-status cluster-nodes optimize index-stats rebuild-indexes \
                  cache-stats cache-clear config-get config-set quotas-get quotas-set \
                  slow-queries backup-create backup-list backup-get backup-download backup-upload \
-                 backup-restore backup-restore-status backup-schedule backup-delete configure-ttl \
+                 backup-restore backup-restore-status backup-schedule backup-delete \
                  encryption-status encryption-rotate encryption-reseal embed-migration" \
                 -- "$cur"))
             ;;
@@ -370,7 +370,6 @@ _dk() {
                         'encryption-rotate:Rotate the encryption key'
                         'encryption-reseal:Run a re-seal pass'
                         'embed-migration:Show the background re-embed'
-                        'configure-ttl:Configure TTL for namespace'
                     )
                     _arguments '1: :->subcmd' \
                         '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
@@ -592,7 +591,6 @@ complete -c dk -f -n '__dk_using_subcommand attachment' -a 'transcribe' -d 'Tran
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'index'      -d 'Index an image as a visual memory'
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'job'        -d 'Show a transcription or index job'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-delete'   -d 'Delete backup'
-complete -c dk -f -n '__dk_using_subcommand admin' -a 'configure-ttl'   -d 'Configure TTL for namespace'
 complete -c dk -n '__dk_using_subcommand admin' -l namespace -s n -d 'Namespace' -r -a '(__dk_namespaces)'
 
 # keys subcommands

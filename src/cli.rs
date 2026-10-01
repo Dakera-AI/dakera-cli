@@ -607,13 +607,11 @@ pub fn build_memory_command() -> Command {
                 .about("Submit feedback on a memory recall")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
                 .arg(Arg::new("memory_id").required(true).help("Memory ID"))
-                .arg(Arg::new("feedback").required(true).help("Feedback text"))
                 .arg(
-                    Arg::new("score")
-                        .short('s')
-                        .long("score")
-                        .value_parser(value_parser!(f32))
-                        .help("Relevance score (0.0 to 1.0)"),
+                    Arg::new("signal")
+                        .required(true)
+                        .value_parser(["upvote", "downvote", "flag", "positive", "negative"])
+                        .help("Feedback signal: upvote/downvote change importance, flag marks it for decay"),
                 ),
         )
         .subcommand(
@@ -1024,23 +1022,6 @@ pub fn build_admin_command() -> Command {
                     .help("Backup ID to delete"),
             ),
         )
-        .subcommand(
-            Command::new("configure-ttl")
-                .about("Configure TTL (time-to-live) for a namespace")
-                .arg(Arg::new("namespace").required(true).help("Namespace name"))
-                .arg(
-                    Arg::new("ttl-seconds")
-                        .long("ttl-seconds")
-                        .required(true)
-                        .value_parser(value_parser!(u64))
-                        .help("TTL in seconds for vectors in this namespace"),
-                )
-                .arg(
-                    Arg::new("strategy")
-                        .long("strategy")
-                        .help("TTL strategy (e.g. delete, archive)"),
-                ),
-        )
 }
 
 fn build_quotas_set_command() -> Command {
@@ -1286,7 +1267,7 @@ pub fn build_text_command() -> Command {
                     Arg::new("namespace")
                         .short('n')
                         .long("namespace")
-                        .help("Namespace to search in"),
+                        .help("Namespace to search (required)"),
                 )
                 .arg(
                     Arg::new("limit")

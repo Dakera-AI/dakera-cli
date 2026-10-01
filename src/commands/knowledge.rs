@@ -50,7 +50,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 min_similarity,
             };
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/graph", agent_id));
+            let t = ctx.log_request("POST", "/v1/knowledge/graph");
             let response = client.knowledge_graph(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -127,7 +127,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 max_edges_per_node: max_edges,
             };
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/full-graph", agent_id));
+            let t = ctx.log_request("POST", "/v1/knowledge/graph/full");
             let response = client.full_knowledge_graph(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -205,7 +205,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 dry_run,
             };
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/summarize", agent_id));
+            let t = ctx.log_request("POST", "/v1/knowledge/summarize");
             let response = client.summarize(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -244,7 +244,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 dry_run,
             };
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/knowledge/deduplicate", agent_id));
+            let t = ctx.log_request("POST", "/v1/knowledge/deduplicate");
             let response = client.deduplicate(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),

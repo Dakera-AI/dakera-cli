@@ -226,28 +226,6 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             output::print_item(&result, ctx.format);
         }
 
-        Some(("configure-ttl", sub)) => {
-            let namespace = sub.get_one::<String>("namespace").unwrap();
-            let ttl_seconds = sub.get_one::<u64>("ttl-seconds").unwrap();
-            let strategy = sub.get_one::<String>("strategy");
-            let mut body = serde_json::json!({ "ttl_seconds": ttl_seconds });
-            if let Some(s) = strategy {
-                body.as_object_mut()
-                    .unwrap()
-                    .insert("strategy".to_string(), Value::String(s.clone()));
-            }
-            let path = format!("/admin/namespaces/{}/ttl", namespace);
-            let t = ctx.log_request("PUT", &path);
-            let result = admin_put(&ctx.url, &path, &body).await;
-            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
-            let result = result?;
-            output::success(&format!(
-                "TTL configured for '{}': {} seconds",
-                namespace, ttl_seconds
-            ));
-            output::print_item(&result, ctx.format);
-        }
-
         _ => {
             output::error("Unknown admin subcommand. Use --help for usage.");
             std::process::exit(1);
@@ -330,14 +308,5 @@ mod tests {
         assert!(build_admin_command()
             .try_get_matches_from(["admin", "backup-download", "b1"])
             .is_err());
-    }
-
-    #[test]
-    fn admin_configure_ttl_requires_ttl_seconds() {
-        let m = build_admin_command()
-            .try_get_matches_from(["admin", "configure-ttl", "my-ns", "--ttl-seconds", "86400"])
-            .expect("admin configure-ttl should parse");
-        let sub = m.subcommand_matches("configure-ttl").unwrap();
-        assert_eq!(*sub.get_one::<u64>("ttl-seconds").unwrap(), 86400u64);
     }
 }

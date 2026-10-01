@@ -1330,3 +1330,213 @@ fn a_quota_413_exits_5_and_points_at_quotas_get() {
     .code(5)
     .stderr(predicate::str::contains("quotas-get"));
 }
+
+// ---------------------------------------------------------------------------
+// Routes the v0.12 server serves (sweep of every route `dk` calls)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn memory_update_calls_the_update_route_with_the_agent_in_the_query() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(PUT)
+            .path("/v1/memory/update/mem-1")
+            .query_param("agent_id", "bot")
+            .json_body(json!({"content": "new text", "memory_type": "semantic"}));
+        then.status(200).json_body(json!({"id": "mem-1"}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "update",
+        "bot",
+        "mem-1",
+        "--content",
+        "new text",
+        "--type",
+        "semantic",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Memory 'mem-1' updated"));
+    m.assert();
+}
+
+#[test]
+fn memory_feedback_sends_a_signal() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memory/feedback")
+            .json_body(json!({"agent_id": "bot", "memory_id": "mem-1", "signal": "downvote"}));
+        then.status(200).json_body(json!({
+            "memory_id": "mem-1", "new_importance": 0.425, "signal": "downvote"
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "feedback",
+        "bot",
+        "mem-1",
+        "downvote",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("signal: downvote"))
+    .stdout(predicate::str::contains("0.425"));
+    m.assert();
+}
+
+#[test]
+fn memory_feedback_rejects_free_text() {
+    dk().args([
+        "--url",
+        "http://127.0.0.1:1",
+        "memory",
+        "feedback",
+        "bot",
+        "mem-1",
+        "very relevant",
+    ])
+    .assert()
+    .failure();
+}
+
+#[test]
+fn batch_forget_deletes_with_a_filter_object() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(DELETE)
+            .path("/v1/memories/forget/batch")
+            .json_body(json!({
+                "agent_id": "bot",
+                "filter": {"memory_type": "working", "min_importance": 0.5}
+            }));
+        then.status(200).json_body(json!({"deleted_count": 4}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-forget",
+        "bot",
+        "--type",
+        "working",
+        "--min-importance",
+        "0.5",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Deleted 4"));
+    m.assert();
+}
+
+#[test]
+fn batch_forget_max_age_becomes_created_before() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(DELETE)
+            .path("/v1/memories/forget/batch")
+            .json_body_includes(json!({"agent_id": "bot"}).to_string());
+        then.status(200).json_body(json!({"deleted_count": 0}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-forget",
+        "bot",
+        "--max-age-days",
+        "30",
+    ])
+    .assert()
+    .success();
+    let hits = m.calls();
+    assert_eq!(hits, 1);
+}
+
+#[test]
+fn batch_forget_dry_run_counts_through_batch_recall() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memories/recall/batch")
+            .json_body(json!({
+                "agent_id": "bot",
+                "filter": {"min_importance": 0.2},
+                "limit": 1
+            }));
+        then.status(200).json_body(json!({
+            "memories": [], "total": 9, "filtered": 7, "truncated": true
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-forget",
+        "bot",
+        "--min-importance",
+        "0.2",
+        "--dry-run",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("[dry-run] Would delete 7"));
+    m.assert();
+}
+
+#[test]
+fn text_search_uses_the_namespace_route_and_top_k() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/namespaces/docs/fulltext/search")
+            .json_body(json!({"query": "needle", "top_k": 20}));
+        then.status(200).json_body(json!({
+            "results": [{"id": "d1", "score": 1.5, "metadata": {"content": "a needle"}}],
+            "search_time_ms": 2
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "text",
+        "search",
+        "needle",
+        "--namespace",
+        "docs",
+        "--limit",
+        "20",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("1 result"))
+    .stdout(predicate::str::contains("a needle"));
+    m.assert();
+}
+
+#[test]
+fn text_search_without_a_namespace_exits_5() {
+    dk().args(["--url", "http://127.0.0.1:1", "text", "search", "needle"])
+        .assert()
+        .failure()
+        .code(5)
+        .stderr(predicate::str::contains("--namespace"));
+}
+
+#[test]
+fn configure_ttl_is_gone() {
+    dk().args(["admin", "configure-ttl", "docs", "--ttl-seconds", "60"])
+        .assert()
+        .failure();
+}

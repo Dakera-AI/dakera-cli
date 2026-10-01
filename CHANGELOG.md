@@ -51,6 +51,15 @@ the commands below that call v0.12 routes say so when run against v0.11.
   `dk-backup-<unix time>`). The `--no-data` flag, which the server never read, is gone.
 - `dk admin quotas-set` called `PUT /admin/quotas`, a route that does not exist; it
   now calls `/admin/quotas/{namespace}` (`-n`) or `/admin/quotas/default`.
+- **Calls to routes the v0.12.0 server does not serve** (found by diffing every route `dk` calls, directly
+  and through `dakera-client` 0.11, against the server router):
+  - `dk memory update` called `PUT /v1/agents/{agent}/memories/{id}`; it now calls `PUT /v1/memory/update/{id}?agent_id=`.
+  - `dk memory feedback` called `POST /v1/agents/{agent}/memories/feedback` with free text; it now calls
+    `POST /v1/memory/feedback` with a `signal` (`upvote`, `downvote`, `flag`, `positive`, `negative`). The text and `--score` arguments are gone.
+  - `dk memory batch-forget` called `POST /v1/memories/forget/batch` with fields the server does not read; it now calls
+    `DELETE` with `{agent_id, filter}` (`--max-age-days` becomes `created_before`) and `--dry-run` counts matches through `POST /v1/memories/recall/batch`.
+  - `dk text search` called `POST /v1/fulltext/search`; it now calls `POST /v1/namespaces/{ns}/fulltext/search` and **needs `--namespace`**.
+  - `dk admin configure-ttl` called `PUT /admin/namespaces/{ns}/ttl`, which does not exist, and is removed: use `dk namespace policy set` (TTL fields).
 - `dk admin` commands printed their success line before checking the answer, so a
   refused call showed a green check and then the error.
 
