@@ -2218,3 +2218,127 @@ fn index_fulltext_stats_prints_the_server_answer() {
     .stdout(predicate::str::contains("\"unique_terms\": 5"));
     m.assert();
 }
+
+// ---------------------------------------------------------------------------
+// namespace create / delete and index rebuild call the server (they were stubs)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn namespace_create_puts_dimension_and_distance() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(PUT)
+            .path("/v1/namespaces/docs")
+            .json_body(json!({"dimension": 384, "distance": "dot"}));
+        then.status(200).json_body(json!({
+            "namespace": "docs", "dimension": 384, "distance": "dot", "created": true
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "namespace",
+        "create",
+        "docs",
+        "--dimension",
+        "384",
+        "--distance",
+        "dot",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Namespace 'docs' created (dimension 384, distance dot)",
+    ));
+    m.assert();
+}
+
+#[test]
+fn namespace_create_reports_an_existing_namespace() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(PUT).path("/v1/namespaces/docs");
+        then.status(200).json_body(json!({
+            "namespace": "docs", "dimension": 384, "distance": "cosine", "created": false
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "namespace",
+        "create",
+        "docs",
+        "--dimension",
+        "384",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("already exists"));
+}
+
+#[test]
+fn namespace_create_needs_a_dimension() {
+    dk().args(["--url", "http://127.0.0.1:1", "namespace", "create", "docs"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--dimension"));
+}
+
+#[test]
+fn namespace_delete_calls_delete() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(DELETE).path("/v1/namespaces/docs");
+        then.status(200).json_body(json!({
+            "success": true, "namespace": "docs", "vectors_deleted": 12
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "namespace",
+        "delete",
+        "docs",
+        "--yes",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "Namespace 'docs' deleted (12 vectors)",
+    ));
+    m.assert();
+}
+
+#[test]
+fn index_rebuild_posts_to_the_admin_route() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/admin/indexes/rebuild")
+            .json_body(json!({"namespace": "docs", "force": true}));
+        then.status(200).json_body(json!({
+            "success": true,
+            "job_id": "job_1",
+            "message": "1 namespace(s) on this node: 1 ANN index(es) rebuilt",
+            "namespaces": []
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "index",
+        "rebuild",
+        "-n",
+        "docs",
+        "--force",
+        "--yes",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("1 ANN index(es) rebuilt"));
+    m.assert();
+}

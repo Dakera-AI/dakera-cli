@@ -326,14 +326,21 @@ pub fn build_namespace_command() -> Command {
         )
         .subcommand(
             Command::new("create")
-                .about("Create a new namespace")
+                .about("Create a namespace (PUT /v1/namespaces/{name}); an existing one with the same dimension is left as is")
                 .arg(Arg::new("name").required(true).help("Namespace name"))
                 .arg(
                     Arg::new("dimension")
                         .short('d')
                         .long("dimension")
-                        .value_parser(value_parser!(u32))
+                        .required(true)
+                        .value_parser(value_parser!(u32).range(1..))
                         .help("Vector dimension"),
+                )
+                .arg(
+                    Arg::new("distance")
+                        .long("distance")
+                        .value_parser(["cosine", "euclidean", "dot"])
+                        .help("Distance metric (server default: cosine)"),
                 ),
         )
         .subcommand(
@@ -415,8 +422,8 @@ pub fn build_index_command() -> Command {
         )
         .subcommand(
             Command::new("rebuild")
-                .about("Rebuild index for a namespace")
-                .after_help("Examples:\n  dk index rebuild -n my-ns --dry-run\n  dk index rebuild -n my-ns --index-type vector --yes")
+                .about("Rebuild the vector index of a namespace (POST /admin/indexes/rebuild)")
+                .after_help("The server picks the index per namespace: an exact flat scan at or below DAKERA_ANN_THRESHOLD, HNSW above it.\n\nExamples:\n  dk index rebuild -n my-ns --dry-run\n  dk index rebuild -n my-ns --yes\n  dk index rebuild -n my-ns --index-type hnsw --force --yes")
                 .arg(
                     Arg::new("namespace")
                         .short('n')
@@ -428,8 +435,13 @@ pub fn build_index_command() -> Command {
                     Arg::new("index-type")
                         .short('t')
                         .long("index-type")
-                        .default_value("all")
-                        .help("Index type to rebuild (vector, fulltext, all)"),
+                        .help("Index kind you expect (e.g. flat, hnsw); the server rejects one that differs from its choice"),
+                )
+                .arg(
+                    Arg::new("force")
+                        .long("force")
+                        .action(ArgAction::SetTrue)
+                        .help("Rebuild even when the cached index is current"),
                 )
                 .arg(
                     Arg::new("yes")

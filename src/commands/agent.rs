@@ -5,6 +5,7 @@ use clap::ArgMatches;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::api;
 use crate::context::Context;
 use crate::output;
 
@@ -97,34 +98,43 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
         Some(("stats", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
 
-            let t = ctx.log_request("GET", &format!("/v1/agents/{}/stats", agent_id));
-            let stats = client.agent_stats(agent_id).await;
-            match &stats {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
+            // Raw REST: the server's timestamps are integers (Unix seconds),
+            // which dakera-client 0.12.0 fails to decode.
+            let path = format!("/v1/agents/{}/stats", api::segment(agent_id));
+            let stats =
+                api::request_json_logged(ctx, dakera_client::reqwest::Method::GET, &path, None)
+                    .await?;
+            if matches!(ctx.format, crate::OutputFormat::Json) {
+                output::print_item(&stats, ctx.format);
+                return Ok(());
             }
-            let stats = stats?;
-
+            let num = |key: &str| {
+                stats
+                    .get(key)
+                    .filter(|v| !v.is_null())
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".to_string())
+            };
             let pairs = [
-                ("Agent ID", stats.agent_id),
-                ("Total Memories", stats.total_memories.to_string()),
-                ("Total Sessions", stats.total_sessions.to_string()),
-                ("Active Sessions", stats.active_sessions.to_string()),
+                (
+                    "Agent ID",
+                    api::str_of(&stats, "agent_id")
+                        .unwrap_or(agent_id)
+                        .to_string(),
+                ),
+                ("Total Memories", num("total_memories")),
+                ("Total Sessions", num("total_sessions")),
+                ("Active Sessions", num("active_sessions")),
                 (
                     "Avg Importance",
                     stats
-                        .avg_importance
-                        .map(|v| format!("{:.3}", v))
+                        .get("avg_importance")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| format!("{v:.3}"))
                         .unwrap_or_else(|| "-".to_string()),
                 ),
-                (
-                    "Oldest Memory",
-                    stats.oldest_memory_at.unwrap_or_else(|| "-".to_string()),
-                ),
-                (
-                    "Newest Memory",
-                    stats.newest_memory_at.unwrap_or_else(|| "-".to_string()),
-                ),
+                ("Oldest Memory", num("oldest_memory_at")),
+                ("Newest Memory", num("newest_memory_at")),
             ];
 
             output::print_kv(
@@ -135,11 +145,13 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 ctx.format,
             );
 
-            if !stats.memories_by_type.is_empty() {
-                println!();
-                output::info("Memories by type:");
-                for (mem_type, count) in &stats.memories_by_type {
-                    println!("  {}: {}", mem_type, count);
+            if let Some(by_type) = stats.get("memories_by_type").and_then(|v| v.as_object()) {
+                if !by_type.is_empty() {
+                    println!();
+                    output::info("Memories by type:");
+                    for (mem_type, count) in by_type {
+                        println!("  {mem_type}: {count}");
+                    }
                 }
             }
         }

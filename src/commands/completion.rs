@@ -9,7 +9,7 @@ use crate::output;
 
 /// All top-level `dk` subcommands (used in every shell script).
 const TOP_LEVEL_CMDS: &str =
-    "init health capabilities attachment namespace vector index ops memory session agent knowledge analytics admin keys config completion";
+    "init health capabilities attachment namespace index memory session agent knowledge admin keys config completion";
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
@@ -94,17 +94,8 @@ _dk() {{
         namespace)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "list get create delete" -- "$cur"))
             ;;
-        vector)
-            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "upsert upsert-one query query-file delete multi-search unified-query aggregate export explain upsert-columns" \
-                -- "$cur"))
-            ;;
         index)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "stats fulltext-stats rebuild" -- "$cur"))
-            ;;
-        ops)
-            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "diagnostics jobs job compact shutdown metrics" -- "$cur"))
             ;;
         memory)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
@@ -119,10 +110,6 @@ _dk() {{
         knowledge)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
                 "graph full-graph summarize deduplicate" -- "$cur"))
-            ;;
-        analytics)
-            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "overview latency throughput storage" -- "$cur"))
             ;;
         admin)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
@@ -210,14 +197,11 @@ _dk() {
                 'capabilities:Show what the server supports'
                 'attachment:Attachments: upload, transcribe, index'
                 'namespace:Manage namespaces'
-                'vector:Vector operations'
                 'index:Index management'
-                'ops:Operations and diagnostics'
                 'memory:Memory operations'
                 'session:Session management'
                 'agent:Agent management'
                 'knowledge:Knowledge graph operations'
-                'analytics:Analytics and statistics'
                 'admin:Administrative operations'
                 'keys:API key management'
                 'config:Show or set configuration'
@@ -244,23 +228,6 @@ _dk() {
                             ;;
                     esac
                     ;;
-                vector)
-                    local v_cmds=(
-                        'upsert:Upsert vectors from JSON file'
-                        'upsert-one:Upsert a single vector'
-                        'query:Query for similar vectors'
-                        'query-file:Query from file'
-                        'delete:Delete vectors by ID'
-                        'multi-search:Multi-vector search with MMR'
-                        'unified-query:Combined vector and text search'
-                        'aggregate:Aggregate vectors with grouping'
-                        'export:Export vectors with pagination'
-                        'explain:Explain query execution plan'
-                        'upsert-columns:Column-format vector upsert'
-                    )
-                    _arguments '1: :->subcmd' '*:namespace:_dk_namespaces'
-                    [[ $state == subcmd ]] && _describe 'vector subcommand' v_cmds
-                    ;;
                 index)
                     local i_cmds=(
                         'stats:Get index statistics'
@@ -269,18 +236,6 @@ _dk() {
                     )
                     _arguments '1: :->subcmd'
                     [[ $state == subcmd ]] && _describe 'index subcommand' i_cmds
-                    ;;
-                ops)
-                    local ops_cmds=(
-                        'diagnostics:Get system diagnostics'
-                        'jobs:List background jobs'
-                        'job:Get specific job status'
-                        'compact:Trigger index compaction'
-                        'shutdown:Gracefully shutdown server'
-                        'metrics:Show server metrics'
-                    )
-                    _arguments '1: :->subcmd'
-                    [[ $state == subcmd ]] && _describe 'ops subcommand' ops_cmds
                     ;;
                 memory)
                     local m_cmds=(
@@ -333,17 +288,6 @@ _dk() {
                     _arguments '1: :->subcmd' \
                         '--agent-id[Agent ID]:agent:_dk_agents'
                     [[ $state == subcmd ]] && _describe 'knowledge subcommand' k_cmds
-                    ;;
-                analytics)
-                    local an_cmds=(
-                        'overview:Analytics overview'
-                        'latency:Latency statistics'
-                        'throughput:Throughput statistics'
-                        'storage:Storage statistics'
-                    )
-                    _arguments '1: :->subcmd' \
-                        '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
-                    [[ $state == subcmd ]] && _describe 'analytics subcommand' an_cmds
                     ;;
                 admin)
                     local ad_cmds=(
@@ -433,8 +377,8 @@ fn fish_script() -> &'static str {
 
 function __dk_no_subcommand
     for i in (commandline -opc)
-        if contains -- $i init health capabilities attachment namespace vector index ops \
-                       memory session agent knowledge analytics admin keys config completion
+        if contains -- $i init health capabilities attachment namespace index \
+                       memory session agent knowledge admin keys config completion
             return 1
         end
     end
@@ -472,14 +416,11 @@ complete -c dk -f -n '__dk_no_subcommand' -a 'health'     -d 'Check server healt
 complete -c dk -f -n '__dk_no_subcommand' -a 'capabilities' -d 'Show what the server supports'
 complete -c dk -f -n '__dk_no_subcommand' -a 'attachment' -d 'Attachments: upload, transcribe, index'
 complete -c dk -f -n '__dk_no_subcommand' -a 'namespace'  -d 'Manage namespaces'
-complete -c dk -f -n '__dk_no_subcommand' -a 'vector'     -d 'Vector operations'
 complete -c dk -f -n '__dk_no_subcommand' -a 'index'      -d 'Index management'
-complete -c dk -f -n '__dk_no_subcommand' -a 'ops'        -d 'Operations and diagnostics'
 complete -c dk -f -n '__dk_no_subcommand' -a 'memory'     -d 'Memory operations'
 complete -c dk -f -n '__dk_no_subcommand' -a 'session'    -d 'Session management'
 complete -c dk -f -n '__dk_no_subcommand' -a 'agent'      -d 'Agent management'
 complete -c dk -f -n '__dk_no_subcommand' -a 'knowledge'  -d 'Knowledge graph operations'
-complete -c dk -f -n '__dk_no_subcommand' -a 'analytics'  -d 'Analytics and statistics'
 complete -c dk -f -n '__dk_no_subcommand' -a 'admin'      -d 'Administrative operations'
 complete -c dk -f -n '__dk_no_subcommand' -a 'keys'       -d 'API key management'
 complete -c dk -f -n '__dk_no_subcommand' -a 'config'     -d 'Show or set configuration'
@@ -491,31 +432,10 @@ complete -c dk -f -n '__dk_using_subcommand namespace' -a 'get'    -d 'Get names
 complete -c dk -f -n '__dk_using_subcommand namespace' -a 'create' -d 'Create a new namespace'
 complete -c dk -f -n '__dk_using_subcommand namespace' -a 'delete' -d 'Delete a namespace'
 
-# vector subcommands
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'upsert'        -d 'Upsert vectors from JSON file'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'upsert-one'    -d 'Upsert a single vector'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'query'         -d 'Query for similar vectors'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'query-file'    -d 'Query from file'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'delete'        -d 'Delete vectors by ID'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'multi-search'  -d 'Multi-vector search with MMR'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'unified-query' -d 'Combined vector and text search'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'aggregate'     -d 'Aggregate vectors with grouping'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'export'        -d 'Export vectors with pagination'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'explain'       -d 'Explain query execution plan'
-complete -c dk -f -n '__dk_using_subcommand vector' -a 'upsert-columns' -d 'Column-format vector upsert'
-
 # index subcommands
 complete -c dk -f -n '__dk_using_subcommand index' -a 'stats'         -d 'Get index statistics'
 complete -c dk -f -n '__dk_using_subcommand index' -a 'fulltext-stats' -d 'Get full-text index statistics'
 complete -c dk -f -n '__dk_using_subcommand index' -a 'rebuild'       -d 'Rebuild index'
-
-# ops subcommands
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'diagnostics' -d 'Get system diagnostics'
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'jobs'        -d 'List background jobs'
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'job'         -d 'Get specific job status'
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'compact'     -d 'Trigger index compaction'
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'shutdown'    -d 'Gracefully shutdown server'
-complete -c dk -f -n '__dk_using_subcommand ops' -a 'metrics'     -d 'Show server metrics'
 
 # memory subcommands
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'store'       -d 'Store a memory'
@@ -552,13 +472,6 @@ complete -c dk -f -n '__dk_using_subcommand knowledge' -a 'full-graph'   -d 'Bui
 complete -c dk -f -n '__dk_using_subcommand knowledge' -a 'summarize'    -d 'Summarize agent memories'
 complete -c dk -f -n '__dk_using_subcommand knowledge' -a 'deduplicate'  -d 'Find and remove duplicate memories'
 complete -c dk -n '__dk_using_subcommand knowledge' -l agent-id -d 'Agent ID' -r -a '(__dk_agents)'
-
-# analytics subcommands
-complete -c dk -f -n '__dk_using_subcommand analytics' -a 'overview'    -d 'Analytics overview'
-complete -c dk -f -n '__dk_using_subcommand analytics' -a 'latency'     -d 'Latency statistics'
-complete -c dk -f -n '__dk_using_subcommand analytics' -a 'throughput'  -d 'Throughput statistics'
-complete -c dk -f -n '__dk_using_subcommand analytics' -a 'storage'     -d 'Storage statistics'
-complete -c dk -n '__dk_using_subcommand analytics' -l namespace -s n -d 'Namespace' -r -a '(__dk_namespaces)'
 
 # admin subcommands
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'cluster-status'  -d 'Get cluster status'

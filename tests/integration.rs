@@ -1214,19 +1214,61 @@ fn container_namespace_create_and_list() {
     let url = container_url();
     let key = container_key();
 
-    // 'namespace create' is a no-op that informs the user that namespaces
-    // are created implicitly on first vector upsert — verify the message.
+    // Create (PUT /v1/namespaces/{ns}); a second create with the same
+    // dimension reports the existing namespace.
     container_dk(&url, &key)
-        .args(["namespace", "create", "integration-test-ns"])
+        .args([
+            "namespace",
+            "create",
+            "integration-test-ns",
+            "--dimension",
+            "8",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("integration-test-ns"));
+    container_dk(&url, &key)
+        .args([
+            "namespace",
+            "create",
+            "integration-test-ns",
+            "--dimension",
+            "8",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already exists"));
 
-    // 'namespace list' should succeed (empty is fine on a fresh server).
     container_dk(&url, &key)
         .args(["namespace", "list"])
         .assert()
+        .success()
+        .stdout(predicate::str::contains("integration-test-ns"));
+    container_dk(&url, &key)
+        .args(["namespace", "get", "integration-test-ns"])
+        .assert()
         .success();
+
+    // A throwaway namespace for delete (the index tests use the one above).
+    container_dk(&url, &key)
+        .args([
+            "namespace",
+            "create",
+            "integration-del-ns",
+            "--dimension",
+            "4",
+        ])
+        .assert()
+        .success();
+    container_dk(&url, &key)
+        .args(["namespace", "delete", "integration-del-ns", "--yes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
+    container_dk(&url, &key)
+        .args(["namespace", "get", "integration-del-ns"])
+        .assert()
+        .code(3);
 }
 
 #[test]

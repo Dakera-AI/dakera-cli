@@ -80,8 +80,9 @@ pub async fn execute() -> Result<()> {
             }
             Ok(_) => {
                 println!(
-                    "  {} Namespace '{}' not found yet — it will be created on first vector upsert.",
+                    "  {} Namespace '{}' not found yet — create it with `dk namespace create {} --dimension <N>`, or store a memory (agent namespaces are created on first store).",
                     Style::new().fg(Color::Blue).paint("i"),
+                    ns,
                     ns
                 );
             }

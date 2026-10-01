@@ -93,6 +93,19 @@ the commands below that call v0.12 routes say so when run against v0.11.
     each group's canonical id, duplicates and similarity.
   The container tests for these commands accepted the failures ("response schema may
   differ"); they now assert success against the real server.
+- **Commands that printed a result without calling the server** now do the work:
+  - `dk namespace create <ns> --dimension <N> [--distance cosine|euclidean|dot]` creates
+    the namespace (`PUT /v1/namespaces/{ns}`); it printed "will be created on first vector
+    upsert" and pointed to a `dk vector upsert` command that does not exist.
+    **`--dimension` is now required** (the server needs it).
+  - `dk namespace delete` deletes (`DELETE /v1/namespaces/{ns}`); it said the server could
+    not delete namespaces.
+  - `dk index rebuild` rebuilds (`POST /admin/indexes/rebuild`, new `--force`); it said
+    "not yet available". `--index-type` no longer defaults to `all` (not a server value):
+    the server picks flat or HNSW per namespace and rejects a different expected kind.
+- `dk agent stats` failed to decode the server's integer timestamps.
+- Shell completions offered `vector`, `ops` and `analytics`, commands that were removed in
+  0.6; `dk init` pointed to vector upserts `dk` cannot do.
 
 ## [0.6.0] - 2026-05-20
 
