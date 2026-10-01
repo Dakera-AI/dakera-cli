@@ -1607,7 +1607,13 @@ fn container_text_search() {
 
     // Accept success or not-found — endpoint may not be in the current server version
     container_dk(&url, &key)
-        .args(["text", "search", "fulltext search", "--namespace", "text-search-agent"])
+        .args([
+            "text",
+            "search",
+            "fulltext search",
+            "--namespace",
+            "text-search-agent",
+        ])
         .assert()
         .code(predicate::in_iter([0i32, 3]));
 }
@@ -1649,7 +1655,8 @@ fn container_keys_list() {
 fn text_search_returns_results() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/namespaces/default/fulltext/search");
+        when.method(POST)
+            .path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -1672,16 +1679,17 @@ fn text_search_returns_results() {
         "--namespace",
         "default",
     ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("1 result"));
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("1 result"));
 }
 
 #[test]
 fn text_search_empty_results_shows_no_results_message() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/namespaces/default/fulltext/search");
+        when.method(POST)
+            .path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "results": [] }));
@@ -1696,9 +1704,9 @@ fn text_search_empty_results_shows_no_results_message() {
         "--namespace",
         "default",
     ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("No results found"));
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("No results found"));
 }
 
 #[test]

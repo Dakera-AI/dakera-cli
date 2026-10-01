@@ -339,8 +339,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                     "limit": 1,
                 });
                 let path = "/v1/memories/recall/batch";
-                let result =
-                    api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+                let result = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
                 let count = api::u64_of(&result, "filtered").unwrap_or(0);
                 output::info(&format!("[dry-run] Would delete {count} memories"));
                 return Ok(());
