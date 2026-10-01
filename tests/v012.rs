@@ -1470,7 +1470,7 @@ fn batch_forget_dry_run_counts_through_batch_recall() {
             .path("/v1/memories/recall/batch")
             .json_body(json!({
                 "agent_id": "bot",
-                "filter": {"min_importance": 0.2},
+                "filter": {"min_importance": 0.5},
                 "limit": 1
             }));
         then.status(200).json_body(json!({
@@ -1485,7 +1485,7 @@ fn batch_forget_dry_run_counts_through_batch_recall() {
         "batch-forget",
         "bot",
         "--min-importance",
-        "0.2",
+        "0.5",
         "--dry-run",
     ])
     .assert()
