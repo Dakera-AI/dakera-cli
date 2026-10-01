@@ -253,6 +253,20 @@ dk memory get my-agent mem-abc123
 # Update a memory
 dk memory update my-agent mem-abc123 --content "Updated content"
 
+# The language of the content or query (server v0.12+; `dk capabilities` lists them)
+dk memory store my-agent "Anna kommt morgen nach Berlin" --lang de
+dk memory recall my-agent "quand part Anna ?" --lang fr
+
+# Link a memory to an uploaded attachment (server v0.12+, DAKERA_ATTACHMENTS)
+dk memory store my-agent "Whiteboard from the planning meeting" --attachment-ref sha256:3f2a...
+
+# Store many memories in one request (up to 1000; --file takes a JSON array, '-' = stdin)
+dk memory batch-store my-agent -c "Prefers dark mode" -c "Lives in Berlin" --tag prefs
+dk memory batch-store my-agent --file memories.json --lang de
+
+# Extract entities from text without storing it
+dk memory extract "Anna met Bob in Paris" --entity-types person,location
+
 # Delete a single memory
 dk memory forget my-agent mem-abc123
 
@@ -266,8 +280,8 @@ dk memory importance my-agent --ids mem-1,mem-2 --value 0.9
 # Consolidate similar memories into summaries
 dk memory consolidate my-agent --dry-run
 
-# Submit recall quality feedback
-dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
+# Submit recall quality feedback (upvote, downvote, flag)
+dk memory feedback my-agent mem-abc123 upvote
 ```
 
 ---
@@ -447,15 +461,17 @@ dk completion powershell
 
 ## Dakera v0.12 and compatibility
 
-`dk` 0.8 works against Dakera **v0.11.108 and v0.12.0** servers. The new
-commands call the server's REST API directly (no SDK change), so they need the
-server release that has the route:
+`dk` 0.8 works against Dakera **v0.11.108 and v0.12.0** servers (it uses
+`dakera-client` 0.12). The new commands need the server release that has the
+route or field:
 
 | Command | v0.11.108 | v0.12.0 |
 |---|---|---|
 | everything in 0.7 (`memory`, `namespace`, `session`, `keys`, ...) | yes | yes |
 | `dk health`, `dk health ready`, `dk health live` | yes | yes (+ `degraded`, `config_warnings`, `embed_migration`) |
 | `dk capabilities` | exits 3 (no route) | yes |
+| `dk memory batch-store`, `dk memory extract` | yes | yes |
+| `--lang` (`dk memory store|recall|search|update|batch-store|extract`), `--attachment-ref` | not read (v0.11.108 ignores unknown fields) | yes; an unsupported language is a `400` (exit 5) |
 | `dk attachment ...` | no | yes, once `DAKERA_ATTACHMENTS` is on |
 | `dk admin embed-migration`, `encryption-status`, `encryption-reseal` | no | yes |
 | other `dk admin` commands (`encryption-rotate`, `backup-*`, `quotas-*`, ...) | routes that v0.11.108 already had | same routes; v0.12 changes who may call them and what they do (below) |

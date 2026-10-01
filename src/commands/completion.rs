@@ -108,7 +108,7 @@ _dk() {{
             ;;
         memory)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "store recall get update forget search importance consolidate feedback" -- "$cur"))
+                "store batch-store recall get update forget search extract importance consolidate feedback" -- "$cur"))
             ;;
         session)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "start end get list memories" -- "$cur"))
@@ -285,11 +285,13 @@ _dk() {
                 memory)
                     local m_cmds=(
                         'store:Store a memory'
+                        'batch-store:Store many memories in one request'
                         'recall:Recall memories by semantic query'
                         'get:Get a memory by ID'
                         'update:Update an existing memory'
                         'forget:Delete a memory'
                         'search:Search memories with filters'
+                        'extract:Extract entities from text'
                         'importance:Update importance score'
                         'consolidate:Consolidate similar memories'
                         'feedback:Submit recall feedback'
@@ -517,11 +519,13 @@ complete -c dk -f -n '__dk_using_subcommand ops' -a 'metrics'     -d 'Show serve
 
 # memory subcommands
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'store'       -d 'Store a memory'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'batch-store' -d 'Store many memories in one request'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'recall'      -d 'Recall memories by semantic query'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'get'         -d 'Get a memory by ID'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'update'      -d 'Update an existing memory'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'forget'      -d 'Delete a memory'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'search'      -d 'Search memories with filters'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'extract'     -d 'Extract entities from text'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'importance'  -d 'Update importance score'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'consolidate' -d 'Consolidate similar memories'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'feedback'    -d 'Submit recall feedback'

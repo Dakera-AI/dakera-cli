@@ -480,8 +480,15 @@ pub fn build_memory_command() -> Command {
                         .short('s')
                         .long("session-id")
                         .help("Session ID to associate with"),
+                )
+                .arg(memory_lang_arg("Language of the content"))
+                .arg(
+                    Arg::new("attachment-ref")
+                        .long("attachment-ref")
+                        .help("Attachment already uploaded to the agent's memory namespace (sha256:<hex>; server v0.12+, needs DAKERA_ATTACHMENTS)"),
                 ),
         )
+        .subcommand(build_memory_batch_store_command())
         .subcommand(
             Command::new("recall")
                 .about("Recall memories by semantic query")
@@ -501,7 +508,8 @@ pub fn build_memory_command() -> Command {
                         .long("type")
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("Filter by memory type"),
-                ),
+                )
+                .arg(memory_lang_arg("Language of the query")),
         )
         .subcommand(
             Command::new("get")
@@ -526,7 +534,10 @@ pub fn build_memory_command() -> Command {
                         .long("type")
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("New memory type"),
-                ),
+                )
+                .arg(memory_lang_arg(
+                    "Language of the memory's content (a change re-derives the text-based data)",
+                )),
         )
         .subcommand(
             Command::new("forget")
@@ -557,8 +568,10 @@ pub fn build_memory_command() -> Command {
                         .long("type")
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("Filter by memory type"),
-                ),
+                )
+                .arg(memory_lang_arg("Language of the query")),
         )
+        .subcommand(build_memory_extract_command())
         .subcommand(
             Command::new("importance")
                 .about("Update importance score for memories")
@@ -709,6 +722,80 @@ pub fn build_memory_command() -> Command {
                         .help("Vector weight 0.0–1.0 (0.0=BM25 only, 1.0=vector only)"),
                 ),
         )
+}
+
+/// `--lang` of the `dk memory` commands (server v0.12+).
+fn memory_lang_arg(help: &'static str) -> Arg {
+    Arg::new("lang").long("lang").help(format!(
+        "{help}: ISO 639-1 code or name, optionally with a region (pt-BR); \
+         the server lists what it supports in `dk capabilities` (server v0.12+)"
+    ))
+}
+
+fn build_memory_batch_store_command() -> Command {
+    Command::new("batch-store")
+        .about("Store many memories in one request (POST /v1/memories/store/batch, up to 1000)")
+        .after_help(
+            "The --file input is a JSON array. Each item is either a string (the content) or an \
+             object with `content` and optional `memory_type`, `importance`, `tags`, \
+             `session_id`, `metadata`, `ttl_seconds`, `expires_at`, `valid_from`, `id` and \
+             `attachment_ref`. --type, --importance, --tag and --session-id fill in what an \
+             item does not set.\n\nExamples:\n  dk memory batch-store my-agent -c 'Prefers dark mode' -c 'Lives in Berlin'\n  dk memory batch-store my-agent --file memories.json --lang de\n  cat memories.json | dk memory batch-store my-agent --file -",
+        )
+        .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+        .arg(
+            Arg::new("content")
+                .short('c')
+                .long("content")
+                .action(ArgAction::Append)
+                .help("Memory content (repeatable)"),
+        )
+        .arg(
+            Arg::new("file")
+                .long("file")
+                .help("JSON array of memories ('-' reads stdin)"),
+        )
+        .arg(
+            Arg::new("type")
+                .short('t')
+                .long("type")
+                .value_parser(["episodic", "semantic", "procedural", "working"])
+                .help("Memory type for items that do not set one (default episodic)"),
+        )
+        .arg(
+            Arg::new("importance")
+                .short('i')
+                .long("importance")
+                .value_parser(value_parser!(f32))
+                .help("Importance for items that do not set one (default 0.5)"),
+        )
+        .arg(
+            Arg::new("tag")
+                .long("tag")
+                .action(ArgAction::Append)
+                .help("Tag for items that set no tags (repeatable)"),
+        )
+        .arg(
+            Arg::new("session-id")
+                .short('s')
+                .long("session-id")
+                .help("Session for items that do not set one"),
+        )
+        .arg(memory_lang_arg("Language of every item's content"))
+}
+
+fn build_memory_extract_command() -> Command {
+    Command::new("extract")
+        .about("Extract entities from text without storing it (POST /v1/memories/extract)")
+        .arg(Arg::new("text").required(true).help("Text to extract entities from"))
+        .arg(
+            Arg::new("entity-types")
+                .short('e')
+                .long("entity-types")
+                .value_delimiter(',')
+                .help("Entity types for the neural extractor, comma-separated (default: the server's person, organization, location)"),
+        )
+        .arg(memory_lang_arg("Language of the text"))
 }
 
 pub fn build_session_command() -> Command {

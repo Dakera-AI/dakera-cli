@@ -368,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "dakera-client"
-version = "0.11.102"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "663759c84ae761526ca78c0bfaad344e2d59239994bcfe14535acd02dd482286"
+checksum = "1ae9381b5359879fc76969e80b9db79a0fedf8affb160e09e5b76ed0b0e01763"
 dependencies = [
  "futures-util",
  "reqwest",

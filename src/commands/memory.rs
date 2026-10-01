@@ -3,8 +3,8 @@
 use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::memory::{
-    BatchMemoryFilter, BatchRecallRequest, ConsolidateRequest, MemoryType, RecallRequest,
-    StoreMemoryRequest, UpdateImportanceRequest,
+    BatchMemoryFilter, BatchRecallRequest, BatchStoreMemoryItem, BatchStoreMemoryRequest,
+    ConsolidateRequest, MemoryType, RecallRequest, StoreMemoryRequest, UpdateImportanceRequest,
 };
 use dakera_client::reqwest::Method;
 use dakera_client::{DakeraClient, HybridSearchRequest};
@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::api;
 use crate::context::Context;
+use crate::error::input_error;
 use crate::output;
 
 #[derive(Debug, Serialize)]
@@ -21,6 +22,20 @@ pub struct MemoryRow {
     pub memory_type: String,
     pub importance: f32,
     pub score: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StoredRow {
+    pub id: String,
+    pub content: String,
+    pub importance: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EntityRow {
+    pub entity_type: String,
+    pub value: String,
+    pub score: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -38,6 +53,17 @@ fn parse_memory_type(s: &str) -> MemoryType {
     }
 }
 
+/// "Found N memories", with the server's total only when it reports a larger
+/// one (`POST /v1/memory/recall` reports no total; `search` reports
+/// `total_count`).
+fn found_message(returned: usize, total: usize) -> String {
+    if total > returned {
+        format!("Found {returned} memories (total: {total})")
+    } else {
+        format!("Found {returned} memories")
+    }
+}
+
 fn memory_type_to_string(mt: &MemoryType) -> String {
     match mt {
         MemoryType::Episodic => "episodic".to_string(),
@@ -52,6 +78,81 @@ fn update_path(agent_id: &str, memory_id: &str) -> String {
     let id = api::segment(memory_id);
     let agent = api::segment(agent_id);
     format!("/v1/memory/update/{id}?agent_id={agent}")
+}
+
+/// The items of `dk memory batch-store`: `--content` values first, then the
+/// `--file` JSON array (strings or item objects). `--type`, `--importance`,
+/// `--tag` and `--session-id` fill in what an item does not set.
+fn batch_store_items(
+    sub: &ArgMatches,
+    file_json: Option<&str>,
+) -> Result<Vec<BatchStoreMemoryItem>> {
+    let mut raw: Vec<serde_json::Value> = sub
+        .get_many::<String>("content")
+        .map(|v| v.map(|c| serde_json::json!(c)).collect())
+        .unwrap_or_default();
+    if let Some(text) = file_json {
+        let parsed: serde_json::Value = serde_json::from_str(text)
+            .map_err(|e| input_error(format!("--file is not valid JSON: {e}")))?;
+        match parsed {
+            serde_json::Value::Array(items) => raw.extend(items),
+            _ => return Err(input_error("--file must hold a JSON array of memories")),
+        }
+    }
+    if raw.is_empty() {
+        return Err(input_error(
+            "nothing to store: give --content and/or --file",
+        ));
+    }
+    if raw.len() > 1000 {
+        return Err(input_error(format!(
+            "{} memories given; the server accepts at most 1000 per batch",
+            raw.len()
+        )));
+    }
+    let memory_type = sub.get_one::<String>("type");
+    let importance = sub.get_one::<f32>("importance");
+    let tags: Option<Vec<String>> = sub.get_many::<String>("tag").map(|v| v.cloned().collect());
+    let session = sub.get_one::<String>("session-id");
+    raw.into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let mut obj = match v {
+                serde_json::Value::String(content) => serde_json::json!({ "content": content }),
+                serde_json::Value::Object(_) => v,
+                _ => {
+                    return Err(input_error(format!(
+                        "item {i}: expected a string or an object"
+                    )))
+                }
+            };
+            if obj.get("content").and_then(|c| c.as_str()).is_none() {
+                return Err(input_error(format!(
+                    "item {i}: `content` (a string) is required"
+                )));
+            }
+            if let Some(mt) = memory_type {
+                if obj.get("memory_type").is_none() {
+                    obj["memory_type"] = serde_json::json!(mt);
+                }
+            }
+            if obj.get("importance").is_none() {
+                obj["importance"] = serde_json::json!(importance.copied().unwrap_or(0.5));
+            }
+            if let Some(t) = &tags {
+                if obj.get("tags").is_none() {
+                    obj["tags"] = serde_json::json!(t);
+                }
+            }
+            if let Some(sid) = session {
+                if obj.get("session_id").is_none() {
+                    obj["session_id"] = serde_json::json!(sid);
+                }
+            }
+            serde_json::from_value::<BatchStoreMemoryItem>(obj)
+                .map_err(|e| input_error(format!("item {i} is not a valid memory: {e}")))
+        })
+        .collect()
 }
 
 /// The `filter` of `DELETE /v1/memories/forget/batch`: type, importance floor
@@ -96,6 +197,12 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(sid) = session_id {
                 request = request.with_session(sid);
             }
+            if let Some(lang) = sub_matches.get_one::<String>("lang") {
+                request = request.with_lang(lang);
+            }
+            if let Some(reference) = sub_matches.get_one::<String>("attachment-ref") {
+                request = request.with_attachment_ref(reference);
+            }
 
             let t = ctx.log_request("POST", "/v1/memory/store");
             let response = client.store_memory(request).await;
@@ -105,9 +212,11 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
             let response = response?;
 
+            // The store answer carries no namespace (the SDK's `namespace` is a
+            // placeholder); the memory lives in the agent's memory namespace.
             output::success(&format!(
-                "Memory stored (id: {}, namespace: {})",
-                response.memory_id, response.namespace
+                "Memory stored (id: {}, agent: {agent_id})",
+                response.memory_id
             ));
         }
 
@@ -122,6 +231,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
             }
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
 
             let t = ctx.log_request("POST", "/v1/memory/recall");
             let response = client.recall(request).await;
@@ -134,10 +244,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if response.memories.is_empty() {
                 output::info("No memories found");
             } else {
-                output::info(&format!(
-                    "Found {} memories (total: {})",
+                output::info(&found_message(
                     response.memories.len(),
-                    response.total_found
+                    response.total_found,
                 ));
                 let rows: Vec<MemoryRow> = response
                     .memories
@@ -178,6 +287,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 let memory_type = memory_type_to_string(&parse_memory_type(t));
                 body["memory_type"] = serde_json::json!(memory_type);
             }
+            if let Some(lang) = sub_matches.get_one::<String>("lang") {
+                body["lang"] = serde_json::json!(lang);
+            }
             let path = update_path(agent_id, memory_id);
             let result = api::request_json_logged(ctx, Method::PUT, &path, Some(&body)).await?;
             let id = api::str_of(&result, "id").unwrap_or(memory_id);
@@ -217,6 +329,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
             }
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
 
             let t = ctx.log_request("POST", "/v1/memory/search");
             let response = client.search_memories(request).await;
@@ -229,10 +342,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if response.memories.is_empty() {
                 output::info("No memories found");
             } else {
-                output::info(&format!(
-                    "Found {} memories (total: {})",
+                output::info(&found_message(
                     response.memories.len(),
-                    response.total_found
+                    response.total_found,
                 ));
                 let rows: Vec<MemoryRow> = response
                     .memories
@@ -243,6 +355,86 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                         memory_type: memory_type_to_string(&m.memory_type),
                         importance: m.importance,
                         score: m.score,
+                    })
+                    .collect();
+                output::print_data(&rows, ctx.format);
+            }
+        }
+
+        Some(("batch-store", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let file_json = match sub_matches.get_one::<String>("file") {
+                Some(path) if path == "-" => {
+                    let mut text = String::new();
+                    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                        .map_err(|e| input_error(format!("failed to read stdin: {e}")))?;
+                    Some(text)
+                }
+                Some(path) => Some(
+                    std::fs::read_to_string(path)
+                        .map_err(|e| input_error(format!("failed to read file {path}: {e}")))?,
+                ),
+                None => None,
+            };
+            let items = batch_store_items(sub_matches, file_json.as_deref())?;
+            let mut request = BatchStoreMemoryRequest::new(agent_id.clone(), items);
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
+
+            let t = ctx.log_request("POST", "/v1/memories/store/batch");
+            let response = client.store_memories_batch(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            output::success(&format!(
+                "Stored {} memories (embedding: {} ms)",
+                response.stored_count, response.total_embedding_time_ms
+            ));
+            let rows: Vec<StoredRow> = response
+                .stored
+                .into_iter()
+                .map(|m| StoredRow {
+                    id: m.id,
+                    content: m.content,
+                    importance: m.importance,
+                })
+                .collect();
+            output::print_data(&rows, ctx.format);
+        }
+
+        Some(("extract", sub_matches)) => {
+            let text = sub_matches.get_one::<String>("text").unwrap();
+            let entity_types: Option<Vec<String>> =
+                sub_matches.get_many::<String>("entity-types").map(|v| {
+                    v.map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty())
+                        .collect()
+                });
+            let lang = sub_matches.get_one::<String>("lang").map(String::as_str);
+
+            let t = ctx.log_request("POST", "/v1/memories/extract");
+            let response = client
+                .extract_entities_with_lang(text, entity_types, lang)
+                .await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            if response.entities.is_empty() {
+                output::info("No entities found");
+            } else {
+                output::info(&format!("Found {} entities", response.entities.len()));
+                let rows: Vec<EntityRow> = response
+                    .entities
+                    .into_iter()
+                    .map(|e| EntityRow {
+                        entity_type: e.entity_type,
+                        value: e.value,
+                        score: e.score,
                     })
                     .collect();
                 output::print_data(&rows, ctx.format);
@@ -518,6 +710,13 @@ mod tests {
                 "round-trip failed for: {s}"
             );
         }
+    }
+
+    #[test]
+    fn found_message_shows_a_total_only_when_it_is_larger() {
+        assert_eq!(found_message(1, 0), "Found 1 memories");
+        assert_eq!(found_message(2, 2), "Found 2 memories");
+        assert_eq!(found_message(2, 9), "Found 2 memories (total: 9)");
     }
 
     #[test]

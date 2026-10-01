@@ -35,6 +35,17 @@ the commands below that call v0.12 routes say so when run against v0.11.
   `413`, `501` and `503` say what to change or when to retry (`Retry-After`).
   With `--format json` the error gains `http_status`, `server_code`, `details`,
   `retry_after_secs`.
+- **`--lang`** on `dk memory store|recall|search|update` (server v0.12): the language
+  of the content or query (ISO 639-1 code or name, optionally with a region, e.g.
+  `pt-BR`); the server lists what it supports in `dk capabilities`.
+- **`--attachment-ref`** on `dk memory store` (server v0.12, `DAKERA_ATTACHMENTS`): link
+  the memory to an uploaded attachment (`sha256:<hex>`).
+- **`dk memory batch-store`**: `POST /v1/memories/store/batch`, up to 1000 memories
+  in one request from repeated `--content` and/or a `--file` JSON array (`-` reads
+  stdin); `--type`, `--importance`, `--tag`, `--session-id` fill in what an item does
+  not set, and `--lang` applies to the whole batch.
+- **`dk memory extract`**: `POST /v1/memories/extract`, entity extraction without
+  storing (`--entity-types`, `--lang`).
 - README: what is new, compatibility with v0.11.108 and v0.12.0, permissions, and
   the server-side `dakera downgrade` and `dakera --check-config` commands.
 
@@ -43,6 +54,11 @@ the commands below that call v0.12 routes say so when run against v0.11.
 - Exit codes follow the HTTP status of an error answer: `401`/`403` exit 4;
   `400`/`409`/`413`/`415`/`422` exit 5; every 5xx (including `501` and `503`) exits 6.
 - Shell completions list the new commands.
+- `dakera-client` 0.11 -> 0.12.0.
+- `dk memory store` prints the agent instead of `namespace: default` (the store
+  answer carries no namespace; that value was a placeholder).
+- `dk memory recall|search` print the server's total only when it reports one larger
+  than the page (recall reports none, so it showed `total: 0`).
 
 ### Fixed
 
@@ -62,6 +78,8 @@ the commands below that call v0.12 routes say so when run against v0.11.
   - `dk admin configure-ttl` called `PUT /admin/namespaces/{ns}/ttl`, which does not exist, and is removed: use `dk namespace policy set` (TTL fields).
 - `dk admin` commands printed their success line before checking the answer, so a
   refused call showed a green check and then the error.
+- The SDK-backed commands (`dk memory`, `dk session`, ...) now get the same exit codes
+  by status as the others: a `400` exited 6 and a `501` exited 1.
 
 ## [0.6.0] - 2026-05-20
 

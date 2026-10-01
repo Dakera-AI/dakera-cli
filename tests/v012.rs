@@ -1540,3 +1540,483 @@ fn configure_ttl_is_gone() {
         .assert()
         .failure();
 }
+
+// ---------------------------------------------------------------------------
+// memory: --lang, --attachment-ref, batch-store, extract (dakera-client 0.12)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn memory_store_sends_lang_and_attachment_ref() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/store").json_body(json!({
+            "agent_id": "bot",
+            "content": "Anna kommt morgen",
+            "memory_type": "episodic",
+            "importance": 0.5,
+            "tags": [],
+            "lang": "de",
+            "attachment_ref": "sha256:abc123"
+        }));
+        then.status(200)
+            .json_body(json!({"memory_id": "mem-9", "namespace": "_dakera_agent_bot"}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "store",
+        "bot",
+        "Anna kommt morgen",
+        "--lang",
+        "de",
+        "--attachment-ref",
+        "sha256:abc123",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("mem-9"));
+    m.assert();
+}
+
+#[test]
+fn memory_store_without_lang_sends_neither_field() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/store").json_body(json!({
+            "agent_id": "bot",
+            "content": "plain",
+            "memory_type": "episodic",
+            "importance": 0.5,
+            "tags": []
+        }));
+        then.status(200)
+            .json_body(json!({"memory_id": "mem-1", "namespace": "_dakera_agent_bot"}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "store",
+        "bot",
+        "plain",
+    ])
+    .assert()
+    .success();
+    m.assert();
+}
+
+#[test]
+fn memory_recall_sends_lang() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memory/recall")
+            .json_body(json!({
+                "agent_id": "bot",
+                "query": "quand",
+                "top_k": 3,
+                "min_importance": 0.0,
+                "tags": [],
+                "lang": "fr"
+            }));
+        then.status(200)
+            .json_body(json!({"memories": [], "total_found": 0}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "recall",
+        "bot",
+        "quand",
+        "--top-k",
+        "3",
+        "--lang",
+        "fr",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("No memories found"));
+    m.assert();
+}
+
+#[test]
+fn memory_search_sends_lang() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memory/search")
+            .json_body(json!({
+                "agent_id": "bot",
+                "query": "cuando",
+                "top_k": 10,
+                "memory_type": "semantic",
+                "min_importance": 0.0,
+                "tags": [],
+                "lang": "es"
+            }));
+        then.status(200)
+            .json_body(json!({"memories": [], "total_found": 0}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "search",
+        "bot",
+        "cuando",
+        "--type",
+        "semantic",
+        "--lang",
+        "es",
+    ])
+    .assert()
+    .success();
+    m.assert();
+}
+
+#[test]
+fn memory_update_sends_lang() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(PUT)
+            .path("/v1/memory/update/mem-1")
+            .query_param("agent_id", "bot")
+            .json_body(json!({"content": "Olá", "lang": "pt-BR"}));
+        then.status(200).json_body(json!({"id": "mem-1"}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "update",
+        "bot",
+        "mem-1",
+        "--content",
+        "Olá",
+        "--lang",
+        "pt-BR",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Memory 'mem-1' updated"));
+    m.assert();
+}
+
+#[test]
+fn memory_batch_store_sends_contents_with_defaults_and_lang() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/v1/memories/store/batch").json_body(json!({
+            "agent_id": "bot",
+            "memories": [
+                {"content": "Prefers dark mode", "memory_type": "episodic", "importance": 0.5, "tags": ["prefs"], "session_id": "s-1"},
+                {"content": "Lives in Berlin", "memory_type": "episodic", "importance": 0.5, "tags": ["prefs"], "session_id": "s-1"}
+            ],
+            "lang": "en"
+        }));
+        then.status(200).json_body(json!({
+            "stored": [
+                {"id": "m-1", "content": "Prefers dark mode", "agent_id": "bot", "tags": ["prefs"], "importance": 0.5, "created_at": 1},
+                {"id": "m-2", "content": "Lives in Berlin", "agent_id": "bot", "tags": ["prefs"], "importance": 0.5, "created_at": 1}
+            ],
+            "stored_count": 2,
+            "total_embedding_time_ms": 7
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-store",
+        "bot",
+        "-c",
+        "Prefers dark mode",
+        "-c",
+        "Lives in Berlin",
+        "--tag",
+        "prefs",
+        "--session-id",
+        "s-1",
+        "--lang",
+        "en",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Stored 2 memories"))
+    .stdout(predicate::str::contains("m-2"));
+    m.assert();
+}
+
+#[test]
+fn memory_batch_store_reads_a_json_file_of_strings_and_objects() {
+    let path = scratch("batch.json");
+    std::fs::write(
+        &path,
+        json!([
+            "first",
+            {"content": "second", "importance": 0.9, "memory_type": "procedural",
+             "tags": ["own"], "attachment_ref": "sha256:ff", "id": "custom-2"}
+        ])
+        .to_string(),
+    )
+    .unwrap();
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/v1/memories/store/batch").json_body(json!({
+            "agent_id": "bot",
+            "memories": [
+                {"content": "first", "memory_type": "semantic", "importance": 0.25, "tags": []},
+                {"content": "second", "memory_type": "procedural", "importance": 0.9, "tags": ["own"],
+                 "attachment_ref": "sha256:ff", "id": "custom-2"}
+            ]
+        }));
+        then.status(200).json_body(json!({
+            "stored": [], "stored_count": 2, "total_embedding_time_ms": 3
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-store",
+        "bot",
+        "--file",
+        path.to_str().unwrap(),
+        "--type",
+        "semantic",
+        "--importance",
+        "0.25",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Stored 2 memories"));
+    m.assert();
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn memory_batch_store_reads_stdin() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/v1/memories/store/batch").json_body(json!({
+            "agent_id": "bot",
+            "memories": [
+                {"content": "from stdin", "memory_type": "episodic", "importance": 0.5, "tags": []}
+            ]
+        }));
+        then.status(200).json_body(json!({
+            "stored": [], "stored_count": 1, "total_embedding_time_ms": 1
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "batch-store",
+        "bot",
+        "--file",
+        "-",
+    ])
+    .write_stdin(r#"["from stdin"]"#)
+    .assert()
+    .success();
+    m.assert();
+}
+
+#[test]
+fn memory_batch_store_rejects_bad_input_before_calling_the_server() {
+    // Nothing to store.
+    dk().args([
+        "--url",
+        "http://127.0.0.1:1",
+        "memory",
+        "batch-store",
+        "bot",
+    ])
+    .assert()
+    .failure()
+    .code(5)
+    .stderr(predicate::str::contains("nothing to store"));
+
+    // Not an array.
+    dk().args([
+        "--url",
+        "http://127.0.0.1:1",
+        "memory",
+        "batch-store",
+        "bot",
+        "--file",
+        "-",
+    ])
+    .write_stdin(r#"{"content": "x"}"#)
+    .assert()
+    .failure()
+    .code(5)
+    .stderr(predicate::str::contains("JSON array"));
+
+    // An object without content.
+    dk().args([
+        "--url",
+        "http://127.0.0.1:1",
+        "memory",
+        "batch-store",
+        "bot",
+        "--file",
+        "-",
+    ])
+    .write_stdin(r#"[{"importance": 0.3}]"#)
+    .assert()
+    .failure()
+    .code(5)
+    .stderr(predicate::str::contains("item 0"));
+}
+
+#[test]
+fn memory_extract_sends_types_and_lang_and_prints_entities() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memories/extract")
+            .json_body(json!({
+                "content": "Anna kommt morgen nach Berlin",
+                "entity_types": ["person", "location"],
+                "lang": "de"
+            }));
+        then.status(200).json_body(json!({
+            "entities": [
+                {"entity_type": "person", "value": "Anna", "score": 0.93},
+                {"entity_type": "location", "value": "Berlin", "score": 0.88}
+            ],
+            "count": 2
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "extract",
+        "Anna kommt morgen nach Berlin",
+        "--entity-types",
+        "person,location",
+        "--lang",
+        "de",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Found 2 entities"))
+    .stdout(predicate::str::contains("Berlin"));
+    m.assert();
+}
+
+#[test]
+fn memory_extract_without_types_omits_entity_types() {
+    // The v0.12.0 server answers `"entity_types": null` with a 422.
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memories/extract")
+            .json_body(json!({"content": "nothing here"}));
+        then.status(200)
+            .json_body(json!({"entities": [], "count": 0}));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "extract",
+        "nothing here",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("No entities found"));
+    m.assert();
+}
+
+// Exit codes of the SDK-backed commands follow the HTTP status, like the
+// raw-REST ones (a 400 used to exit 6 and a 501 exit 1).
+
+#[test]
+fn sdk_command_400_exits_5() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/store");
+        then.status(400).json_body(json!({
+            "error": "Invalid request: unsupported lang 'xx': supported languages are en, de, fr, es, it, pt, nl",
+            "code": "INVALID_REQUEST",
+            "status": 400
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "store",
+        "bot",
+        "x",
+        "--lang",
+        "xx",
+    ])
+    .assert()
+    .failure()
+    .code(5)
+    .stderr(predicate::str::contains("unsupported lang"));
+}
+
+#[test]
+fn sdk_command_501_feature_disabled_exits_6() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/memory/store");
+        then.status(501).json_body(json!({
+            "error": "The attachments API is not enabled on this server (set DAKERA_ATTACHMENTS to enable it)",
+            "code": "FEATURE_DISABLED",
+            "status": 501
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "store",
+        "bot",
+        "x",
+        "--attachment-ref",
+        "sha256:00",
+    ])
+    .assert()
+    .failure()
+    .code(6)
+    .stderr(predicate::str::contains("DAKERA_ATTACHMENTS"));
+}
+
+#[test]
+fn sdk_command_404_exits_3() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/v1/memory/get/nope");
+        then.status(404).json_body(json!({
+            "error": "Memory not found: nope",
+            "code": "VECTOR_NOT_FOUND",
+            "status": 404
+        }));
+    });
+
+    dk().args(["--url", &server.base_url(), "memory", "get", "bot", "nope"])
+        .assert()
+        .failure()
+        .code(3);
+}

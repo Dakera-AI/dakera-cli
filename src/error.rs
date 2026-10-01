@@ -120,13 +120,25 @@ pub fn classify(err: &anyhow::Error) -> CliError {
 
     // An HTTP error answer is classified by its status, not by its text.
     if let Some(api) = err.downcast_ref::<ApiHttpError>() {
-        return match api.status {
-            401 | 403 => CliError::Permission(msg),
-            404 => CliError::NotFound(msg),
-            400 | 409 | 413 | 415 | 422 => CliError::Input(msg),
-            500..=599 => CliError::Server(msg),
-            _ => CliError::Other(msg),
-        };
+        return by_status(api.status, msg);
+    }
+
+    // The same for the errors of the SDK-backed commands.
+    if let Some(sdk) = err.downcast_ref::<dakera_client::ClientError>() {
+        use dakera_client::ClientError as E;
+        match sdk {
+            E::Server { status, .. } | E::Authorization { status, .. } => {
+                return by_status(*status, msg)
+            }
+            E::QuotaExceeded { .. } | E::PayloadTooLarge { .. } => return CliError::Input(msg),
+            E::FeatureDisabled { .. } | E::NotImplemented { .. } | E::ServiceUnavailable { .. } => {
+                return CliError::Server(msg)
+            }
+            E::NamespaceNotFound(_) | E::VectorNotFound(_) => return CliError::NotFound(msg),
+            E::Connection(_) | E::Timeout => return CliError::Connection(msg),
+            E::Http(e) if e.is_connect() || e.is_timeout() => return CliError::Connection(msg),
+            _ => {}
+        }
     }
     let msg_lower = msg.to_lowercase();
 
@@ -157,6 +169,17 @@ pub fn classify(err: &anyhow::Error) -> CliError {
         CliError::Server(msg)
     } else {
         CliError::Other(msg)
+    }
+}
+
+/// Exit-code class of an HTTP error status.
+fn by_status(status: u16, msg: String) -> CliError {
+    match status {
+        401 | 403 => CliError::Permission(msg),
+        404 => CliError::NotFound(msg),
+        400 | 409 | 413 | 415 | 422 => CliError::Input(msg),
+        500..=599 => CliError::Server(msg),
+        _ => CliError::Other(msg),
     }
 }
 
