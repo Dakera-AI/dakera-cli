@@ -44,7 +44,7 @@ toml = "1.1"
 dirs = "6.0"
 
 # Table output
-comfy-table = "7"
+comfy-table = "8"
 
 # Progress bars for long-running operations
 indicatif = "0.18"
