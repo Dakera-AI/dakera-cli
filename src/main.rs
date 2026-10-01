@@ -1,5 +1,6 @@
 //! Dakera CLI - Command-line interface for Dakera AI Agent Memory Platform
 
+mod api;
 mod cli;
 mod commands;
 mod config;
@@ -13,8 +14,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::cli::build_cli;
 use crate::commands::{
-    admin, agent, completion, config as config_cmd, health, index, init, keys, knowledge, memory,
-    namespace, session, text,
+    admin, agent, attachment, capabilities, completion, config as config_cmd, health, index, init,
+    keys, knowledge, memory, namespace, session, text,
 };
 use crate::config::Config;
 use crate::context::Context;
@@ -59,12 +60,7 @@ async fn main() {
 
         match format {
             OutputFormat::Json | OutputFormat::Compact => {
-                let json_err = error::JsonError {
-                    error: true,
-                    code: cli_err.error_code(),
-                    exit_code,
-                    message: cli_err.to_string(),
-                };
+                let json_err = error::JsonError::from_error(&cli_err, &err);
                 let s = if matches!(format, OutputFormat::Json) {
                     serde_json::to_string_pretty(&json_err)
                 } else {
@@ -140,10 +136,9 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
 
     match matches.subcommand() {
         Some(("init", _)) => init::execute().await?,
-        Some(("health", sub_matches)) => {
-            let detailed = sub_matches.get_flag("detailed");
-            health::execute(&ctx, detailed).await?;
-        }
+        Some(("health", sub_matches)) => health::execute(&ctx, sub_matches).await?,
+        Some(("capabilities", _)) => capabilities::execute(&ctx).await?,
+        Some(("attachment", sub_matches)) => attachment::execute(&ctx, sub_matches).await?,
         Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
         Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
         Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,

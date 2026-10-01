@@ -32,7 +32,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let metadata_str = sub_matches.get_one::<String>("metadata");
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/sessions", agent_id));
+            let t = ctx.log_request("POST", "/v1/sessions/start");
             let session = if let Some(m) = metadata_str {
                 let metadata: serde_json::Value =
                     serde_json::from_str(m).context("Invalid metadata JSON")?;
@@ -56,7 +56,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
             let summary = sub_matches.get_one::<String>("summary").cloned();
 
-            let t = ctx.log_request("PUT", &format!("/v1/sessions/{}/end", session_id));
+            let t = ctx.log_request("POST", &format!("/v1/sessions/{}/end", session_id));
             let response = client.end_session(session_id, summary).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -94,13 +94,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             }
             query_params.push(format!("limit={}", limit));
 
-            let query_string = if query_params.is_empty() {
-                String::new()
-            } else {
-                format!("?{}", query_params.join("&"))
-            };
-
-            let path = format!("/v1/sessions{}", query_string);
+            let path = format!("/v1/sessions?{}", query_params.join("&"));
             let t = ctx.log_request("GET", &path);
             let list_url = format!("{}{}", ctx.url, path);
             let response = super::authed_client().get(&list_url).send().await?;

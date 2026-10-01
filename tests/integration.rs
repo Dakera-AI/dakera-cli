@@ -479,10 +479,11 @@ fn memory_update_success_reports_memory_id() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(PUT)
-            .path("/v1/agents/test-agent/memories/mem-001");
+            .path("/v1/memory/update/mem-001")
+            .query_param("agent_id", "test-agent");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "memory_id": "mem-001" }));
+            .json_body(json!({ "id": "mem-001" }));
     });
 
     dk().args([
@@ -539,11 +540,14 @@ fn memory_consolidate_dry_run_shows_preview() {
 fn memory_feedback_submits_and_reports_status() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/v1/agents/test-agent/memories/feedback");
+        when.method(POST).path("/v1/memory/feedback");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "status": "accepted", "updated_importance": 0.75 }));
+            .json_body(json!({
+                "memory_id": "mem-001",
+                "new_importance": 0.75,
+                "signal": "upvote"
+            }));
     });
 
     dk().args([
@@ -553,7 +557,7 @@ fn memory_feedback_submits_and_reports_status() {
         "feedback",
         "test-agent",
         "mem-001",
-        "Very relevant",
+        "upvote",
     ])
     .assert()
     .success()
@@ -859,17 +863,26 @@ fn session_memories_empty_shows_message() {
 // knowledge graph
 // ---------------------------------------------------------------------------
 
+// The v0.12.0 server's POST /v1/knowledge/graph needs a seed `memory_id` and
+// answers {root: {memory, similarity, related: [...]}, total_nodes}.
+
 #[test]
-fn knowledge_graph_empty_shows_zero_nodes() {
+fn knowledge_graph_without_related_shows_one_node() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/knowledge/graph");
+        when.method(POST)
+            .path("/v1/knowledge/graph")
+            .json_body(json!({"agent_id": "test-agent", "memory_id": "mem-001"}));
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
-                "nodes": [],
-                "edges": [],
-                "clusters": null
+                "root": {
+                    "memory": {"id": "mem-001", "content": "alone", "memory_type": "episodic",
+                               "agent_id": "test-agent", "importance": 0.5, "tags": [], "created_at": 1},
+                    "similarity": 1.0,
+                    "related": []
+                },
+                "total_nodes": 1
             }));
     });
 
@@ -879,51 +892,48 @@ fn knowledge_graph_empty_shows_zero_nodes() {
         "knowledge",
         "graph",
         "test-agent",
-    ])
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("0 nodes"));
-}
-
-#[test]
-fn knowledge_graph_shows_node_and_edge_counts() {
-    let server = MockServer::start();
-    server.mock(|when, then| {
-        when.method(POST).path("/v1/knowledge/graph");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({
-                "nodes": [
-                    {
-                        "id": "mem-001",
-                        "content": "Cat3 temporal reasoning memory",
-                        "memory_type": "semantic",
-                        "importance": 0.9
-                    }
-                ],
-                "edges": [
-                    {
-                        "source": "mem-001",
-                        "target": "mem-002",
-                        "similarity": 0.85,
-                        "relationship": "similar"
-                    }
-                ],
-                "clusters": null
-            }));
-    });
-
-    dk().args([
-        "--url",
-        &server.base_url(),
-        "knowledge",
-        "graph",
-        "test-agent",
+        "--memory-id",
+        "mem-001",
     ])
     .assert()
     .success()
     .stdout(predicate::str::contains("1 nodes"))
-    .stdout(predicate::str::contains("1 edges"));
+    .stdout(predicate::str::contains("Related memories").not());
+}
+
+#[test]
+fn knowledge_graph_shows_node_count_and_related() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/knowledge/graph");
+        then.status(200)
+            .header("Content-Type", "application/json")
+            .json_body(json!({
+                "root": {
+                    "memory": {"id": "mem-001", "content": "Cat3 temporal reasoning memory",
+                               "memory_type": "semantic", "agent_id": "test-agent",
+                               "importance": 0.9, "tags": [], "created_at": 1},
+                    "similarity": 1.0,
+                    "related": [{"memory_id": "mem-002", "similarity": 0.85, "shared_tags": []}]
+                },
+                "total_nodes": 2
+            }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "knowledge",
+        "graph",
+        "test-agent",
+        "--memory-id",
+        "mem-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("2 nodes"))
+    .stdout(predicate::str::contains("mem-002"))
+    .stdout(predicate::str::contains("0.850"));
 }
 
 // ---------------------------------------------------------------------------
@@ -938,9 +948,9 @@ fn knowledge_deduplicate_dry_run_reports_found_groups() {
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
-                "duplicates_found": 4,
-                "groups": [["mem-001", "mem-002"]],
-                "removed_count": 2
+                "groups": [{"canonical_id": "mem-001", "duplicate_ids": ["mem-002"], "avg_similarity": 0.97}],
+                "duplicates_found": 1,
+                "duplicates_merged": 0
             }));
     });
 
@@ -954,6 +964,7 @@ fn knowledge_deduplicate_dry_run_reports_found_groups() {
     ])
     .assert()
     .success()
+    .stdout(predicate::str::contains("mem-002"))
     .stdout(predicate::str::contains("[dry-run]"));
 }
 
@@ -1203,19 +1214,61 @@ fn container_namespace_create_and_list() {
     let url = container_url();
     let key = container_key();
 
-    // 'namespace create' is a no-op that informs the user that namespaces
-    // are created implicitly on first vector upsert — verify the message.
+    // Create (PUT /v1/namespaces/{ns}); a second create with the same
+    // dimension reports the existing namespace.
     container_dk(&url, &key)
-        .args(["namespace", "create", "integration-test-ns"])
+        .args([
+            "namespace",
+            "create",
+            "integration-test-ns",
+            "--dimension",
+            "8",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("integration-test-ns"));
+    container_dk(&url, &key)
+        .args([
+            "namespace",
+            "create",
+            "integration-test-ns",
+            "--dimension",
+            "8",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already exists"));
 
-    // 'namespace list' should succeed (empty is fine on a fresh server).
     container_dk(&url, &key)
         .args(["namespace", "list"])
         .assert()
+        .success()
+        .stdout(predicate::str::contains("integration-test-ns"));
+    container_dk(&url, &key)
+        .args(["namespace", "get", "integration-test-ns"])
+        .assert()
         .success();
+
+    // A throwaway namespace for delete (the index tests use the one above).
+    container_dk(&url, &key)
+        .args([
+            "namespace",
+            "create",
+            "integration-del-ns",
+            "--dimension",
+            "4",
+        ])
+        .assert()
+        .success();
+    container_dk(&url, &key)
+        .args(["namespace", "delete", "integration-del-ns", "--yes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("deleted"));
+    container_dk(&url, &key)
+        .args(["namespace", "get", "integration-del-ns"])
+        .assert()
+        .code(3);
 }
 
 #[test]
@@ -1427,51 +1480,116 @@ fn container_memory_batch_forget_dry_run() {
 // Container — knowledge graph operations
 // ---------------------------------------------------------------------------
 
+/// Store memories with `dk --format json memory batch-store` and return their ids.
+fn container_batch_store(url: &str, key: &str, agent: &str, contents: &[&str]) -> Vec<String> {
+    let mut args: Vec<String> = vec![
+        "--format".into(),
+        "json".into(),
+        "memory".into(),
+        "batch-store".into(),
+        agent.into(),
+    ];
+    for c in contents {
+        args.push("-c".into());
+        args.push((*c).into());
+    }
+    let out = container_dk(url, key).args(&args).assert().success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    // The JSON array starts on its own line, after the success line.
+    let start = stdout
+        .find("\n[")
+        .map(|i| i + 1)
+        .or_else(|| stdout.starts_with('[').then_some(0))
+        .expect("batch-store --format json prints a JSON array");
+    let rows: serde_json::Value = serde_json::from_str(stdout[start..].trim()).unwrap();
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
 #[test]
 #[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
 fn container_knowledge_full_graph() {
     let url = container_url();
     let key = container_key();
+    container_batch_store(
+        &url,
+        &key,
+        "kg-full-agent",
+        &[
+            "The Alpha project deadline is Friday",
+            "The Alpha project deadline moved to next Friday",
+        ],
+    );
 
-    // Ensure the agent namespace exists before querying the graph
     container_dk(&url, &key)
-        .args([
-            "memory",
-            "store",
-            "integration-agent",
-            "setup memory for graph test",
-        ])
+        .args(["knowledge", "full-graph", "kg-full-agent"])
         .assert()
-        .success();
-
-    // Server response schema may differ; accept success or decode error
-    container_dk(&url, &key)
-        .args(["knowledge", "full-graph", "integration-agent"])
-        .assert()
-        .code(predicate::in_iter([0i32, 1]));
+        .success()
+        .stdout(predicate::str::contains(
+            "Full knowledge graph for 'kg-full-agent'",
+        ));
 }
 
 #[test]
 #[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
-fn container_knowledge_summarize_dry_run() {
+fn container_knowledge_graph_from_a_seed_memory() {
     let url = container_url();
     let key = container_key();
+    let ids = container_batch_store(
+        &url,
+        &key,
+        "kg-seed-agent",
+        &[
+            "Anna leads the Alpha project",
+            "Anna presents Alpha on Friday",
+        ],
+    );
 
     container_dk(&url, &key)
         .args([
-            "memory",
-            "store",
-            "integration-agent",
-            "setup memory for summarize test",
+            "knowledge",
+            "graph",
+            "kg-seed-agent",
+            "--memory-id",
+            &ids[0],
         ])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "Knowledge graph from {}",
+            ids[0]
+        )));
+}
 
-    // Server may return 422 on schema mismatch; accept success or server error
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_knowledge_summarize() {
+    let url = container_url();
+    let key = container_key();
+    let ids = container_batch_store(
+        &url,
+        &key,
+        "kg-sum-agent",
+        &[
+            "Standup: Bob fixed the login bug",
+            "Standup: Bob shipped the login fix",
+        ],
+    );
+
     container_dk(&url, &key)
-        .args(["knowledge", "summarize", "integration-agent", "--dry-run"])
+        .args([
+            "knowledge",
+            "summarize",
+            "kg-sum-agent",
+            "--memory-ids",
+            &ids.join(","),
+        ])
         .assert()
-        .code(predicate::in_iter([0i32, 1, 6]));
+        .success()
+        .stdout(predicate::str::contains("Summarized 2 memories into"));
 }
 
 #[test]
@@ -1479,22 +1597,59 @@ fn container_knowledge_summarize_dry_run() {
 fn container_knowledge_deduplicate_dry_run() {
     let url = container_url();
     let key = container_key();
+    container_batch_store(
+        &url,
+        &key,
+        "kg-dedup-agent",
+        &["The office is in Lisbon", "The office is in Lisbon"],
+    );
+
+    container_dk(&url, &key)
+        .args(["knowledge", "deduplicate", "kg-dedup-agent", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[dry-run] Found"));
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_memory_lang_batch_store_and_extract() {
+    let url = container_url();
+    let key = container_key();
 
     container_dk(&url, &key)
         .args([
             "memory",
             "store",
-            "integration-agent",
-            "setup memory for deduplicate test",
+            "lang-agent",
+            "Anna kommt morgen",
+            "--lang",
+            "de",
         ])
         .assert()
         .success();
-
-    // Server response schema may differ; accept success or decode error
     container_dk(&url, &key)
-        .args(["knowledge", "deduplicate", "integration-agent", "--dry-run"])
+        .args(["memory", "recall", "lang-agent", "Anna", "--lang", "de"])
         .assert()
-        .code(predicate::in_iter([0i32, 1]));
+        .success();
+    // An unsupported language is the server's 400: exit 5.
+    container_dk(&url, &key)
+        .args(["memory", "store", "lang-agent", "x", "--lang", "xx"])
+        .assert()
+        .code(5);
+
+    let ids = container_batch_store(&url, &key, "lang-agent", &["one", "two"]);
+    assert_eq!(ids.len(), 2);
+
+    // Without --entity-types the server runs its rule-based pass only.
+    container_dk(&url, &key)
+        .args([
+            "memory",
+            "extract",
+            "Contact anna@example.com on 2026-10-05",
+        ])
+        .assert()
+        .success();
 }
 
 // ---------------------------------------------------------------------------
@@ -1603,7 +1758,13 @@ fn container_text_search() {
 
     // Accept success or not-found — endpoint may not be in the current server version
     container_dk(&url, &key)
-        .args(["text", "search", "fulltext search"])
+        .args([
+            "text",
+            "search",
+            "fulltext search",
+            "--namespace",
+            "text-search-agent",
+        ])
         .assert()
         .code(predicate::in_iter([0i32, 3]));
 }
@@ -1645,7 +1806,8 @@ fn container_keys_list() {
 fn text_search_returns_results() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/fulltext/search");
+        when.method(POST)
+            .path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({
@@ -1653,41 +1815,56 @@ fn text_search_returns_results() {
                     {
                         "id": "mem-001",
                         "score": 0.95,
-                        "content": "BM25 search result content",
-                        "namespace": "default"
+                        "metadata": { "content": "BM25 search result content" }
                     }
-                ],
-                "total": 1
+                ]
             }));
     });
 
-    dk().args(["--url", &server.base_url(), "text", "search", "my query"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("1 result"));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "text",
+        "search",
+        "my query",
+        "--namespace",
+        "default",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("1 result"));
 }
 
 #[test]
 fn text_search_empty_results_shows_no_results_message() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/fulltext/search");
+        when.method(POST)
+            .path("/v1/namespaces/default/fulltext/search");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "results": [], "total": 0 }));
+            .json_body(json!({ "results": [] }));
     });
 
-    dk().args(["--url", &server.base_url(), "text", "search", "no match"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("No results found"));
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "text",
+        "search",
+        "no match",
+        "--namespace",
+        "default",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("No results found"));
 }
 
 #[test]
 fn memory_batch_forget_returns_deleted_count() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/memories/forget/batch");
+        when.method(DELETE).path("/v1/memories/forget/batch");
         then.status(200)
             .header("Content-Type", "application/json")
             .json_body(json!({ "deleted_count": 5 }));
@@ -1699,6 +1876,8 @@ fn memory_batch_forget_returns_deleted_count() {
         "memory",
         "batch-forget",
         "test-agent",
+        "--min-importance",
+        "0.5",
     ])
     .assert()
     .success()
@@ -1709,10 +1888,15 @@ fn memory_batch_forget_returns_deleted_count() {
 fn memory_batch_forget_dry_run_shows_preview() {
     let server = MockServer::start();
     server.mock(|when, then| {
-        when.method(POST).path("/v1/memories/forget/batch");
+        when.method(POST).path("/v1/memories/recall/batch");
         then.status(200)
             .header("Content-Type", "application/json")
-            .json_body(json!({ "deleted_count": 3 }));
+            .json_body(json!({
+                "memories": [],
+                "total": 10,
+                "filtered": 3,
+                "truncated": true
+            }));
     });
 
     dk().args([
@@ -1721,6 +1905,8 @@ fn memory_batch_forget_dry_run_shows_preview() {
         "memory",
         "batch-forget",
         "test-agent",
+        "--min-importance",
+        "0.5",
         "--dry-run",
     ])
     .assert()

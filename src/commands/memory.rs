@@ -3,13 +3,16 @@
 use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::memory::{
-    BatchMemoryFilter, BatchRecallRequest, ConsolidateRequest, FeedbackRequest, MemoryType,
-    RecallRequest, StoreMemoryRequest, UpdateImportanceRequest, UpdateMemoryRequest,
+    BatchMemoryFilter, BatchRecallRequest, BatchStoreMemoryItem, BatchStoreMemoryRequest,
+    ConsolidateRequest, MemoryType, RecallRequest, StoreMemoryRequest, UpdateImportanceRequest,
 };
+use dakera_client::reqwest::Method;
 use dakera_client::{DakeraClient, HybridSearchRequest};
 use serde::Serialize;
 
+use crate::api;
 use crate::context::Context;
+use crate::error::input_error;
 use crate::output;
 
 #[derive(Debug, Serialize)]
@@ -19,6 +22,20 @@ pub struct MemoryRow {
     pub memory_type: String,
     pub importance: f32,
     pub score: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StoredRow {
+    pub id: String,
+    pub content: String,
+    pub importance: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EntityRow {
+    pub entity_type: String,
+    pub value: String,
+    pub score: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -36,6 +53,17 @@ fn parse_memory_type(s: &str) -> MemoryType {
     }
 }
 
+/// "Found N memories", with the server's total only when it reports a larger
+/// one (`POST /v1/memory/recall` reports no total; `search` reports
+/// `total_count`).
+fn found_message(returned: usize, total: usize) -> String {
+    if total > returned {
+        format!("Found {returned} memories (total: {total})")
+    } else {
+        format!("Found {returned} memories")
+    }
+}
+
 fn memory_type_to_string(mt: &MemoryType) -> String {
     match mt {
         MemoryType::Episodic => "episodic".to_string(),
@@ -43,6 +71,109 @@ fn memory_type_to_string(mt: &MemoryType) -> String {
         MemoryType::Procedural => "procedural".to_string(),
         MemoryType::Working => "working".to_string(),
     }
+}
+
+/// `PUT /v1/memory/update/{id}?agent_id=...` (the SDK 0.11 route does not exist).
+fn update_path(agent_id: &str, memory_id: &str) -> String {
+    let id = api::segment(memory_id);
+    let agent = api::segment(agent_id);
+    format!("/v1/memory/update/{id}?agent_id={agent}")
+}
+
+/// The items of `dk memory batch-store`: `--content` values first, then the
+/// `--file` JSON array (strings or item objects). `--type`, `--importance`,
+/// `--tag` and `--session-id` fill in what an item does not set.
+fn batch_store_items(
+    sub: &ArgMatches,
+    file_json: Option<&str>,
+) -> Result<Vec<BatchStoreMemoryItem>> {
+    let mut raw: Vec<serde_json::Value> = sub
+        .get_many::<String>("content")
+        .map(|v| v.map(|c| serde_json::json!(c)).collect())
+        .unwrap_or_default();
+    if let Some(text) = file_json {
+        let parsed: serde_json::Value = serde_json::from_str(text)
+            .map_err(|e| input_error(format!("--file is not valid JSON: {e}")))?;
+        match parsed {
+            serde_json::Value::Array(items) => raw.extend(items),
+            _ => return Err(input_error("--file must hold a JSON array of memories")),
+        }
+    }
+    if raw.is_empty() {
+        return Err(input_error(
+            "nothing to store: give --content and/or --file",
+        ));
+    }
+    if raw.len() > 1000 {
+        return Err(input_error(format!(
+            "{} memories given; the server accepts at most 1000 per batch",
+            raw.len()
+        )));
+    }
+    let memory_type = sub.get_one::<String>("type");
+    let importance = sub.get_one::<f32>("importance");
+    let tags: Option<Vec<String>> = sub.get_many::<String>("tag").map(|v| v.cloned().collect());
+    let session = sub.get_one::<String>("session-id");
+    raw.into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let mut obj = match v {
+                serde_json::Value::String(content) => serde_json::json!({ "content": content }),
+                serde_json::Value::Object(_) => v,
+                _ => {
+                    return Err(input_error(format!(
+                        "item {i}: expected a string or an object"
+                    )))
+                }
+            };
+            if obj.get("content").and_then(|c| c.as_str()).is_none() {
+                return Err(input_error(format!(
+                    "item {i}: `content` (a string) is required"
+                )));
+            }
+            if let Some(mt) = memory_type {
+                if obj.get("memory_type").is_none() {
+                    obj["memory_type"] = serde_json::json!(mt);
+                }
+            }
+            if obj.get("importance").is_none() {
+                obj["importance"] = serde_json::json!(importance.copied().unwrap_or(0.5));
+            }
+            if let Some(t) = &tags {
+                if obj.get("tags").is_none() {
+                    obj["tags"] = serde_json::json!(t);
+                }
+            }
+            if let Some(sid) = session {
+                if obj.get("session_id").is_none() {
+                    obj["session_id"] = serde_json::json!(sid);
+                }
+            }
+            serde_json::from_value::<BatchStoreMemoryItem>(obj)
+                .map_err(|e| input_error(format!("item {i} is not a valid memory: {e}")))
+        })
+        .collect()
+}
+
+/// The `filter` of `DELETE /v1/memories/forget/batch`: type, importance floor
+/// and age become `memory_type`, `min_importance` and `created_before`.
+fn batch_forget_filter(sub: &ArgMatches) -> serde_json::Value {
+    let mut filter = serde_json::json!({});
+    if let Some(mt) = sub.get_one::<String>("type") {
+        filter["memory_type"] = serde_json::json!(mt);
+    }
+    if let Some(mi) = sub.get_one::<f32>("min-importance") {
+        filter["min_importance"] = serde_json::json!(mi);
+    }
+    if let Some(days) = sub.get_one::<u32>("max-age-days") {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let cutoff = now.saturating_sub(u64::from(*days) * 86_400);
+        filter["created_before"] = serde_json::json!(cutoff);
+    }
+    filter
 }
 
 pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
@@ -66,8 +197,14 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(sid) = session_id {
                 request = request.with_session(sid);
             }
+            if let Some(lang) = sub_matches.get_one::<String>("lang") {
+                request = request.with_lang(lang);
+            }
+            if let Some(reference) = sub_matches.get_one::<String>("attachment-ref") {
+                request = request.with_attachment_ref(reference);
+            }
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/memories", agent_id));
+            let t = ctx.log_request("POST", "/v1/memory/store");
             let response = client.store_memory(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -75,9 +212,11 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
             let response = response?;
 
+            // The store answer carries no namespace (the SDK's `namespace` is a
+            // placeholder); the memory lives in the agent's memory namespace.
             output::success(&format!(
-                "Memory stored (id: {}, namespace: {})",
-                response.memory_id, response.namespace
+                "Memory stored (id: {}, agent: {agent_id})",
+                response.memory_id
             ));
         }
 
@@ -92,8 +231,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
             }
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/memories/recall", agent_id));
+            let t = ctx.log_request("POST", "/v1/memory/recall");
             let response = client.recall(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -104,10 +244,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if response.memories.is_empty() {
                 output::info("No memories found");
             } else {
-                output::info(&format!(
-                    "Found {} memories (total: {})",
+                output::info(&found_message(
                     response.memories.len(),
-                    response.total_found
+                    response.total_found,
                 ));
                 let rows: Vec<MemoryRow> = response
                     .memories
@@ -128,7 +267,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
 
-            let t = ctx.log_request("GET", &format!("/v1/memories/{}", memory_id));
+            let t = ctx.log_request("GET", &format!("/v1/memory/get/{}", memory_id));
             let memory = client.get_memory(agent_id, memory_id).await;
             match &memory {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -140,24 +279,21 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
         Some(("update", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
-            let content = sub_matches.get_one::<String>("content").cloned();
-            let memory_type = sub_matches
-                .get_one::<String>("type")
-                .map(|s| parse_memory_type(s));
-
-            let request = UpdateMemoryRequest {
-                content,
-                metadata: None,
-                memory_type,
-            };
-
-            let t = ctx.log_request("PUT", &format!("/v1/{}/memories/{}", agent_id, memory_id));
-            let response = client.update_memory(agent_id, memory_id, request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
+            let mut body = serde_json::json!({});
+            if let Some(content) = sub_matches.get_one::<String>("content") {
+                body["content"] = serde_json::json!(content);
             }
-            output::success(&format!("Memory '{}' updated", response?.memory_id));
+            if let Some(t) = sub_matches.get_one::<String>("type") {
+                let memory_type = memory_type_to_string(&parse_memory_type(t));
+                body["memory_type"] = serde_json::json!(memory_type);
+            }
+            if let Some(lang) = sub_matches.get_one::<String>("lang") {
+                body["lang"] = serde_json::json!(lang);
+            }
+            let path = update_path(agent_id, memory_id);
+            let result = api::request_json_logged(ctx, Method::PUT, &path, Some(&body)).await?;
+            let id = api::str_of(&result, "id").unwrap_or(memory_id);
+            output::success(&format!("Memory '{id}' updated"));
         }
 
         Some(("forget", sub_matches)) => {
@@ -168,10 +304,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 agent_id.clone(),
                 vec![memory_id.clone()],
             );
-            let t = ctx.log_request(
-                "DELETE",
-                &format!("/v1/{}/memories/{}", agent_id, memory_id),
-            );
+            let t = ctx.log_request("POST", "/v1/memory/forget");
             let response = client.forget(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -196,8 +329,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(t) = memory_type {
                 request = request.with_type(parse_memory_type(t));
             }
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/memories/search", agent_id));
+            let t = ctx.log_request("POST", "/v1/memory/search");
             let response = client.search_memories(request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -208,10 +342,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if response.memories.is_empty() {
                 output::info("No memories found");
             } else {
-                output::info(&format!(
-                    "Found {} memories (total: {})",
+                output::info(&found_message(
                     response.memories.len(),
-                    response.total_found
+                    response.total_found,
                 ));
                 let rows: Vec<MemoryRow> = response
                     .memories
@@ -222,6 +355,86 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                         memory_type: memory_type_to_string(&m.memory_type),
                         importance: m.importance,
                         score: m.score,
+                    })
+                    .collect();
+                output::print_data(&rows, ctx.format);
+            }
+        }
+
+        Some(("batch-store", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+            let file_json = match sub_matches.get_one::<String>("file") {
+                Some(path) if path == "-" => {
+                    let mut text = String::new();
+                    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                        .map_err(|e| input_error(format!("failed to read stdin: {e}")))?;
+                    Some(text)
+                }
+                Some(path) => Some(
+                    std::fs::read_to_string(path)
+                        .map_err(|e| input_error(format!("failed to read file {path}: {e}")))?,
+                ),
+                None => None,
+            };
+            let items = batch_store_items(sub_matches, file_json.as_deref())?;
+            let mut request = BatchStoreMemoryRequest::new(agent_id.clone(), items);
+            request.lang = sub_matches.get_one::<String>("lang").cloned();
+
+            let t = ctx.log_request("POST", "/v1/memories/store/batch");
+            let response = client.store_memories_batch(request).await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            output::success(&format!(
+                "Stored {} memories (embedding: {} ms)",
+                response.stored_count, response.total_embedding_time_ms
+            ));
+            let rows: Vec<StoredRow> = response
+                .stored
+                .into_iter()
+                .map(|m| StoredRow {
+                    id: m.id,
+                    content: m.content,
+                    importance: m.importance,
+                })
+                .collect();
+            output::print_data(&rows, ctx.format);
+        }
+
+        Some(("extract", sub_matches)) => {
+            let text = sub_matches.get_one::<String>("text").unwrap();
+            let entity_types: Option<Vec<String>> =
+                sub_matches.get_many::<String>("entity-types").map(|v| {
+                    v.map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty())
+                        .collect()
+                });
+            let lang = sub_matches.get_one::<String>("lang").map(String::as_str);
+
+            let t = ctx.log_request("POST", "/v1/memories/extract");
+            let response = client
+                .extract_entities_with_lang(text, entity_types, lang)
+                .await;
+            match &response {
+                Ok(_) => ctx.log_response(t, "200 OK"),
+                Err(_) => ctx.log_response(t, "ERR"),
+            }
+            let response = response?;
+
+            if response.entities.is_empty() {
+                output::info("No entities found");
+            } else {
+                output::info(&format!("Found {} entities", response.entities.len()));
+                let rows: Vec<EntityRow> = response
+                    .entities
+                    .into_iter()
+                    .map(|e| EntityRow {
+                        entity_type: e.entity_type,
+                        value: e.value,
+                        score: e.score,
                     })
                     .collect();
                 output::print_data(&rows, ctx.format);
@@ -243,7 +456,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 importance: value,
             };
 
-            let t = ctx.log_request("PUT", &format!("/v1/{}/memories/importance", agent_id));
+            let t = ctx.log_request("POST", "/v1/memory/importance");
             client.update_importance(agent_id, request).await?;
             ctx.log_response(t, "200 OK");
             output::success(&format!(
@@ -266,7 +479,7 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 ..Default::default()
             };
 
-            let t = ctx.log_request("POST", &format!("/v1/{}/memories/consolidate", agent_id));
+            let t = ctx.log_request("POST", "/v1/memory/consolidate");
             let response = client.consolidate(agent_id, request).await;
             match &response {
                 Ok(_) => ctx.log_response(t, "200 OK"),
@@ -292,83 +505,42 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
         Some(("feedback", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
-            let feedback = sub_matches.get_one::<String>("feedback").unwrap();
-            let score = sub_matches.get_one::<f32>("score").copied();
-
-            let request = FeedbackRequest {
-                memory_id: memory_id.clone(),
-                feedback: feedback.clone(),
-                relevance_score: score,
-            };
-
-            let t = ctx.log_request("POST", &format!("/v1/{}/memories/feedback", agent_id));
-            let response = client.memory_feedback(agent_id, request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            let response = response?;
-
-            output::success(&format!("Feedback submitted (status: {})", response.status));
-            if let Some(importance) = response.updated_importance {
-                output::info(&format!("Updated importance: {}", importance));
+            let signal = sub_matches.get_one::<String>("signal").unwrap();
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "memory_id": memory_id,
+                "signal": signal,
+            });
+            let path = "/v1/memory/feedback";
+            let result = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+            output::success(&format!("Feedback submitted (signal: {signal})"));
+            if let Some(importance) = result.get("new_importance").and_then(|v| v.as_f64()) {
+                output::info(&format!("New importance: {importance}"));
             }
         }
 
         Some(("batch-forget", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
-            let memory_type = sub_matches.get_one::<String>("type").cloned();
-            let min_importance = sub_matches.get_one::<f32>("min-importance").copied();
-            let max_age_days = sub_matches.get_one::<u32>("max-age-days").copied();
             let dry_run = sub_matches.get_flag("dry-run");
-
-            let mut filters = serde_json::json!({});
-            if let Some(ref mt) = memory_type {
-                filters["memory_type"] = serde_json::Value::String(mt.clone());
-            }
-            if let Some(mi) = min_importance {
-                filters["min_importance"] = serde_json::json!(mi);
-            }
-            if let Some(age) = max_age_days {
-                filters["max_age_days"] = serde_json::json!(age);
-            }
+            let filter = batch_forget_filter(sub_matches);
             if dry_run {
-                filters["dry_run"] = serde_json::Value::Bool(true);
+                // Count what the filter matches with the batch-recall route.
+                let body = serde_json::json!({
+                    "agent_id": agent_id,
+                    "filter": filter,
+                    "limit": 1,
+                });
+                let path = "/v1/memories/recall/batch";
+                let result = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+                let count = api::u64_of(&result, "filtered").unwrap_or(0);
+                output::info(&format!("[dry-run] Would delete {count} memories"));
+                return Ok(());
             }
-
-            let body = serde_json::json!({
-                "agent_id": agent_id,
-                "filters": filters
-            });
-
+            let body = serde_json::json!({ "agent_id": agent_id, "filter": filter });
             let path = "/v1/memories/forget/batch";
-            let t = ctx.log_request("POST", path);
-            let http_client = super::authed_client();
-            let resp = http_client
-                .post(format!("{}{}", ctx.url, path))
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to POST {}: {}", path, e))?;
-            let status = resp.status();
-            let text = resp.text().await?;
-            ctx.log_response(t, &status.to_string());
-            if !status.is_success() {
-                anyhow::bail!("Request failed ({}): {}", status, text);
-            }
-
-            let data: serde_json::Value =
-                serde_json::from_str(&text).unwrap_or(serde_json::json!({ "deleted_count": 0 }));
-            let count = data
-                .get("deleted_count")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-
-            if dry_run {
-                output::info(&format!("[dry-run] Would delete {} memories", count));
-            } else {
-                output::success(&format!("Deleted {} memories", count));
-            }
+            let result = api::request_json_logged(ctx, Method::DELETE, path, Some(&body)).await?;
+            let count = api::u64_of(&result, "deleted_count").unwrap_or(0);
+            output::success(&format!("Deleted {count} memories"));
         }
 
         Some(("batch-recall", sub_matches)) => {
@@ -538,6 +710,13 @@ mod tests {
                 "round-trip failed for: {s}"
             );
         }
+    }
+
+    #[test]
+    fn found_message_shows_a_total_only_when_it_is_larger() {
+        assert_eq!(found_message(1, 0), "Found 1 memories");
+        assert_eq!(found_message(2, 2), "Found 2 memories");
+        assert_eq!(found_message(2, 9), "Found 2 memories (total: 9)");
     }
 
     #[test]

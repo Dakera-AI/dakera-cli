@@ -81,11 +81,11 @@ Pre-built binaries for macOS (arm64/x64), Linux (x64/arm64), and Windows are ava
 
 | Platform | File |
 |---|---|
-| macOS (Apple Silicon) | `dk-aarch64-apple-darwin.tar.gz` |
-| macOS (Intel) | `dk-x86_64-apple-darwin.tar.gz` |
-| Linux x64 | `dk-x86_64-unknown-linux-musl.tar.gz` |
-| Linux arm64 | `dk-aarch64-unknown-linux-musl.tar.gz` |
-| Windows x64 | `dk-x86_64-pc-windows-msvc.zip` |
+| macOS (Apple Silicon) | `dakera-cli-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `dakera-cli-x86_64-apple-darwin.tar.gz` |
+| Linux x64 | `dakera-cli-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 | `dakera-cli-aarch64-unknown-linux-musl.tar.gz` |
+| Windows x64 | `dakera-cli-x86_64-pc-windows-msvc.zip` |
 
 ---
 
@@ -105,7 +105,7 @@ dk memory store my-agent "The user prefers concise responses" --importance 0.8
 dk memory recall my-agent "user preferences" --top-k 5
 
 # 5. Full-text BM25 search
-dk text search "user preferences"
+dk text search "user preferences" --namespace default
 ```
 
 ---
@@ -168,12 +168,56 @@ dk --verbose memory store my-agent "new memory"
 
 ### `dk health`
 
-Check server health and connectivity.
+Check server health and connectivity. Reads the server's JSON directly, so a
+v0.12 server that is still loading its models (`/health` answers `503` with a
+`Retry-After` header) is reported as such, with exit code 6 — never as healthy.
 
 ```bash
-dk health
-dk health --detailed
+dk health                  # status; lists degraded components, config warnings, embed migration
+dk health --detailed       # + live / ready probes, version, build, uptime, diagnostics
+dk health ready            # GET /health/ready  (exit 6 and the reason/downloads while starting)
+dk health live             # GET /health/live
 ```
+
+---
+
+### `dk capabilities`
+
+What the connected server supports (`GET /v1/capabilities`, Dakera v0.12+): the
+active embedding model, search mode, scoring strategy, query languages (`lang`)
+and which opt-in features are on (attachments, speech to text, image indexing,
+records). A v0.11 server has no such route: the command exits 3 and says so.
+
+```bash
+dk capabilities
+dk --format json capabilities
+```
+
+---
+
+### `dk attachment`
+
+Files that agent memories can point at (Dakera v0.12, **opt-in**: the server
+answers `501 FEATURE_DISABLED` until `DAKERA_ATTACHMENTS` is set; image indexing
+also needs `DAKERA_VISION`). `dk capabilities` shows what is on.
+
+```bash
+dk attachment upload _dakera_agent_my-agent note.wav    # media type guessed from the extension
+dk attachment list _dakera_agent_my-agent
+dk attachment download _dakera_agent_my-agent sha256:<hex> -o note.wav
+dk attachment delete _dakera_agent_my-agent sha256:<hex>   # 409 while a memory references it
+
+# Speech to text: a WAV attachment becomes a memory (a background job)
+dk attachment transcribe uploads sha256:<hex> --agent-id my-agent --tag voice --wait
+# Visual memory from a PNG (needs DAKERA_VISION)
+dk attachment index uploads sha256:<hex> --agent-id my-agent --content "page 3" --wait
+dk attachment job uploads sha256:<hex> job_1a2b3c4d_0 --kind transcribe
+```
+
+A memory can only reference an attachment stored in its own namespace,
+`_dakera_agent_<agent_id>`; `transcribe` and `index` copy an attachment from any
+namespace you can read into the agent's. `--wait` polls the job (progress goes
+to stderr) and exits 5 if the job fails with a `400`, 6 on a `5xx`.
 
 ---
 
@@ -209,6 +253,20 @@ dk memory get my-agent mem-abc123
 # Update a memory
 dk memory update my-agent mem-abc123 --content "Updated content"
 
+# The language of the content or query (server v0.12+; `dk capabilities` lists them)
+dk memory store my-agent "Anna kommt morgen nach Berlin" --lang de
+dk memory recall my-agent "quand part Anna ?" --lang fr
+
+# Link a memory to an uploaded attachment (server v0.12+, DAKERA_ATTACHMENTS)
+dk memory store my-agent "Whiteboard from the planning meeting" --attachment-ref sha256:3f2a...
+
+# Store many memories in one request (up to 1000; --file takes a JSON array, '-' = stdin)
+dk memory batch-store my-agent -c "Prefers dark mode" -c "Lives in Berlin" --tag prefs
+dk memory batch-store my-agent --file memories.json --lang de
+
+# Extract entities from text without storing it
+dk memory extract "Anna met Bob in Paris" --entity-types person,location
+
 # Delete a single memory
 dk memory forget my-agent mem-abc123
 
@@ -222,8 +280,8 @@ dk memory importance my-agent --ids mem-1,mem-2 --value 0.9
 # Consolidate similar memories into summaries
 dk memory consolidate my-agent --dry-run
 
-# Submit recall quality feedback
-dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
+# Submit recall quality feedback (upvote, downvote, flag)
+dk memory feedback my-agent mem-abc123 upvote
 ```
 
 ---
@@ -233,8 +291,8 @@ dk memory feedback my-agent mem-abc123 "Highly relevant" --score 1.0
 Full-text (BM25) search across memories.
 
 ```bash
-# Search all namespaces
-dk text search "machine learning"
+# Search one namespace (the server has no cross-namespace full-text route)
+dk text search "machine learning" --namespace default
 
 # Search within a specific namespace
 dk text search "temporal reasoning" --namespace my-ns --limit 20
@@ -338,13 +396,40 @@ dk admin cache-clear --namespace my-ns
 dk admin config-get
 dk admin config-set --key max_connections --value 100
 
-# Namespace quotas
+# Namespace quotas (a hard quota is enforced since v0.12: writes over it get 413)
 dk admin quotas-get
-dk admin quotas-set --data '{"max_memories": 10000}'
+dk admin quotas-set --data '{"max_vectors": 100000, "enforcement": "hard"}'              # default quota
+dk admin quotas-set -n my-ns --data '{"max_vectors": 10000, "enforcement": "soft"}'      # one namespace
 
 # Performance diagnostics
 dk admin slow-queries --limit 10
+
+# After an upgrade to v0.12: the one-time background re-embed (also in `dk health`)
+dk admin embed-migration
+
+# Encryption at rest (v0.12 keyring): status, rotation per namespace, re-seal
+dk admin encryption-status
+dk admin encryption-rotate -n my-ns                      # a new random key for one namespace
+dk admin encryption-rotate --new-key-env MY_NEW_KEY      # global, from a passphrase in the environment
+dk admin encryption-reseal --wait-secs 30
+
+# Backups
+dk admin backup-create --name nightly --type full --wait
+dk admin backup-list
+dk admin backup-get <backup-id>
+dk admin backup-schedule                                 # an enabled schedule runs since v0.12
+dk admin backup-download <backup-id> -o nightly.json.gz  # super_admin
+dk admin backup-upload nightly.json.gz                   # super_admin
+dk admin backup-restore <backup-id> -n my-ns --wait      # super_admin; add --overwrite --yes for a point-in-time restore
+dk admin backup-restore-status <restore-id>
+dk admin backup-delete <backup-id>
 ```
+
+All of these need a **global** key. A key pinned to namespaces gets `403` on
+node-wide routes even with the `admin` scope, and backup download, upload and
+restore need `super_admin` (see [Permissions](#permissions-v012)). The previous
+`backup-create` sent no `name`, which the server requires, and `quotas-set`
+called a route that does not exist; both now work.
 
 ---
 
@@ -374,6 +459,69 @@ dk completion powershell
 
 ---
 
+## Dakera v0.12 and compatibility
+
+`dk` 0.8 works against Dakera **v0.11.108 and v0.12.0** servers (it uses
+`dakera-client` 0.12). The new commands need the server release that has the
+route or field:
+
+| Command | v0.11.108 | v0.12.0 |
+|---|---|---|
+| everything in 0.7 (`memory`, `namespace`, `session`, `keys`, ...) | yes | yes |
+| `dk health`, `dk health ready`, `dk health live` | yes | yes (+ `degraded`, `config_warnings`, `embed_migration`) |
+| `dk capabilities` | exits 3 (no route) | yes |
+| `dk memory batch-store`, `dk memory extract` | yes | yes |
+| `--lang` (`dk memory store|recall|search|update|batch-store|extract`), `--attachment-ref` | not read (v0.11.108 ignores unknown fields) | yes; an unsupported language is a `400` (exit 5) |
+| `dk attachment ...` | no | yes, once `DAKERA_ATTACHMENTS` is on |
+| `dk admin embed-migration`, `encryption-status`, `encryption-reseal` | no | yes |
+| other `dk admin` commands (`encryption-rotate`, `backup-*`, `quotas-*`, ...) | routes that v0.11.108 already had | same routes; v0.12 changes who may call them and what they do (below) |
+
+### Permissions (v0.12)
+
+* **Keys pinned to namespaces get `403`** on node-wide routes (`/admin/*`:
+  backups, encryption, quotas, config, cluster), even with the `admin` scope.
+* **Backup download, upload and restore need a global `super_admin` key**: a
+  backup bundle carries every API key hash, so an `admin` key can no longer take
+  one (or restore an edited one).
+
+`dk` turns those answers into a message that says what to do, for example:
+
+```
+✗ Permission denied: Request failed (403 Forbidden) [INSUFFICIENT_SCOPE]: Insufficient scope for this operation (required: super_admin, actual: admin)
+  hint: this needs a global super_admin key: since v0.12 backup download, upload and restore are refused to admin keys ...
+```
+
+### Errors
+
+v0.12 answers every error with a JSON body (`{"error", "code", "status", "details"}`)
+and every `503` carries `Retry-After`. `dk` keeps those fields: with
+`--format json` the error on stderr gains `http_status`, `server_code`, `details`
+and `retry_after_secs`. A `413` (a body over a size limit such as
+`DAKERA_ATTACHMENT_MAX_BYTES`, or a hard namespace quota) exits 5; a `501` (a
+feature that is switched off, `FEATURE_DISABLED`, or a configuration the server
+cannot serve) and a `503` exit 6. Retry a `503` after the `Retry-After` seconds.
+
+### Server-side commands (not `dk` commands)
+
+Two operator commands ship in the **server binary**, not in `dk`; run them with
+the server's image, environment and volumes:
+
+```bash
+# Check a configuration with the new image before upgrading: exits 0 (the server
+# would start, warnings included) or 78 (it would refuse). Starts nothing.
+docker run --rm <same env and volumes> <v0.12 image> --check-config
+
+# Go back to v0.11.108: run once, after the v0.12 server has stopped. Prints a JSON
+# report; exit 0 = the data is v0.11.108's, 1 = something still needs fixing (run it
+# again), 78 = it refused and changed nothing.
+docker run --rm <same env and volumes> <v0.12 image> downgrade
+```
+
+See the server's `docs/v0.12/UPGRADE.md` ("Going back to v0.11.108") for what
+`downgrade` converts and when it refuses.
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -382,9 +530,9 @@ dk completion powershell
 | 1 | General error |
 | 2 | Connection error (server unreachable) |
 | 3 | Not found |
-| 4 | Permission denied / authentication failure |
-| 5 | Invalid input |
-| 6 | Server-side error (5xx) |
+| 4 | Permission denied / authentication failure (`401`, `403`) |
+| 5 | Invalid input (`400`, `409`, `413`, `415`, `422`, or a bad argument) |
+| 6 | Server-side error (5xx, including `501` feature disabled and `503` busy/starting) |
 
 Scripts can check `$?` after each command.
 

@@ -5,6 +5,108 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-01
+
+Support for Dakera server v0.12.0. Compatible with v0.11.108 and v0.12.0 servers;
+the commands below that call v0.12 routes say so when run against v0.11.
+
+### Added
+
+- **`dk capabilities`**: `GET /v1/capabilities` as a table (active model, search
+  mode, scoring strategy, query languages, opt-in features on/off). Exits 3 with a
+  clear message on a server that predates v0.12.
+- **`dk health ready` / `dk health live`**: the readiness and liveness probes.
+  `dk health` and `dk health --detailed` now read the JSON directly: a starting
+  server (`503` + `Retry-After`) is reported as such (exit 6) instead of healthy,
+  and the `degraded`, `config_warnings` and `embed_migration` fields are shown.
+- **`dk attachment upload|list|download|delete|transcribe|index|job`**: the v0.12
+  attachment, speech-to-text and image-index routes (opt-in on the server:
+  `DAKERA_ATTACHMENTS`, `DAKERA_VISION`), with `--wait` for the background jobs.
+- **`dk admin embed-migration`**: `GET /admin/reembed/migration`.
+- **`dk admin encryption-status|encryption-rotate|encryption-reseal`**: the v0.12
+  keyring; rotation of one namespace (`-n`) or of everything, the new key read from
+  an environment variable (`--new-key-env`), never from the command line.
+- **`dk admin backup-get|backup-download|backup-upload|backup-restore-status|backup-schedule`**,
+  and options on `backup-create` (`--name`, `--type`, `-n`, `--encrypt`,
+  `--compression`, `--wait`) and `backup-restore` (`-n`, `--overwrite --yes`, `--wait`).
+- **Permission and error messages**: every non-2xx answer keeps the server's JSON
+  error body. A `403` says whether the key is pinned to namespaces (v0.12: `403` on
+  node-wide routes) or lacks `super_admin` (backup download, upload, restore); a
+  `413`, `501` and `503` say what to change or when to retry (`Retry-After`).
+  With `--format json` the error gains `http_status`, `server_code`, `details`,
+  `retry_after_secs`.
+- **`--lang`** on `dk memory store|recall|search|update` (server v0.12): the language
+  of the content or query (ISO 639-1 code or name, optionally with a region, e.g.
+  `pt-BR`); the server lists what it supports in `dk capabilities`.
+- **`--attachment-ref`** on `dk memory store` (server v0.12, `DAKERA_ATTACHMENTS`): link
+  the memory to an uploaded attachment (`sha256:<hex>`).
+- **`dk memory batch-store`**: `POST /v1/memories/store/batch`, up to 1000 memories
+  in one request from repeated `--content` and/or a `--file` JSON array (`-` reads
+  stdin); `--type`, `--importance`, `--tag`, `--session-id` fill in what an item does
+  not set, and `--lang` applies to the whole batch.
+- **`dk memory extract`**: `POST /v1/memories/extract`, entity extraction without
+  storing (`--entity-types`, `--lang`).
+- README: what is new, compatibility with v0.11.108 and v0.12.0, permissions, and
+  the server-side `dakera downgrade` and `dakera --check-config` commands.
+
+### Changed
+
+- Exit codes follow the HTTP status of an error answer: `401`/`403` exit 4;
+  `400`/`409`/`413`/`415`/`422` exit 5; every 5xx (including `501` and `503`) exits 6.
+- Shell completions list the new commands.
+- `dakera-client` 0.11 -> 0.12.0.
+- `dk memory store` prints the agent instead of `namespace: default` (the store
+  answer carries no namespace; that value was a placeholder).
+- `dk memory recall|search` print the server's total only when it reports one larger
+  than the page (recall reports none, so it showed `total: 0`).
+
+### Fixed
+
+- `dk admin backup-create` sent `{"include_data": ...}` and no `name`, which the
+  server requires, so it could not succeed; it now sends `name` (default
+  `dk-backup-<unix time>`). The `--no-data` flag, which the server never read, is gone.
+- `dk admin quotas-set` called `PUT /admin/quotas`, a route that does not exist; it
+  now calls `/admin/quotas/{namespace}` (`-n`) or `/admin/quotas/default`.
+- **Calls to routes the v0.12.0 server does not serve** (found by diffing every route `dk` calls, directly
+  and through `dakera-client` 0.11, against the server router):
+  - `dk memory update` called `PUT /v1/agents/{agent}/memories/{id}`; it now calls `PUT /v1/memory/update/{id}?agent_id=`.
+  - `dk memory feedback` called `POST /v1/agents/{agent}/memories/feedback` with free text; it now calls
+    `POST /v1/memory/feedback` with a `signal` (`upvote`, `downvote`, `flag`, `positive`, `negative`). The text and `--score` arguments are gone.
+  - `dk memory batch-forget` called `POST /v1/memories/forget/batch` with fields the server does not read; it now calls
+    `DELETE` with `{agent_id, filter}` (`--max-age-days` becomes `created_before`) and `--dry-run` counts matches through `POST /v1/memories/recall/batch`.
+  - `dk text search` called `POST /v1/fulltext/search`; it now calls `POST /v1/namespaces/{ns}/fulltext/search` and **needs `--namespace`**.
+  - `dk admin configure-ttl` called `PUT /admin/namespaces/{ns}/ttl`, which does not exist, and is removed: use `dk namespace policy set` (TTL fields).
+- `dk admin` commands printed their success line before checking the answer, so a
+  refused call showed a green check and then the error.
+- The SDK-backed commands (`dk memory`, `dk session`, ...) now get the same exit codes
+  by status as the others: a `400` exited 6 and a `501` exited 1.
+- **`dk knowledge graph|full-graph|summarize|deduplicate` and `dk index fulltext-stats`
+  failed on every call** against v0.11.108 and v0.12.0 (`dakera-client` does not match
+  these routes: "error decoding response body", or a 422). They now call the REST API
+  with the server's request and answer shapes:
+  - `dk knowledge graph` needs `--memory-id` (the server builds the graph around a seed
+    memory) and prints the seed and its related memories.
+  - `dk knowledge summarize` needs `--memory-ids` with at least two ids, prints the new
+    summary memory, and **`--dry-run` is removed**: the server has no dry run and always
+    stores the summary, so the flag announced a preview while writing.
+  - `dk knowledge full-graph` prints clusters and the hub memory; `deduplicate` prints
+    each group's canonical id, duplicates and similarity.
+  The container tests for these commands accepted the failures ("response schema may
+  differ"); they now assert success against the real server.
+- **Commands that printed a result without calling the server** now do the work:
+  - `dk namespace create <ns> --dimension <N> [--distance cosine|euclidean|dot]` creates
+    the namespace (`PUT /v1/namespaces/{ns}`); it printed "will be created on first vector
+    upsert" and pointed to a `dk vector upsert` command that does not exist.
+    **`--dimension` is now required** (the server needs it).
+  - `dk namespace delete` deletes (`DELETE /v1/namespaces/{ns}`); it said the server could
+    not delete namespaces.
+  - `dk index rebuild` rebuilds (`POST /admin/indexes/rebuild`, new `--force`); it said
+    "not yet available". `--index-type` no longer defaults to `all` (not a server value):
+    the server picks flat or HNSW per namespace and rejects a different expected kind.
+- `dk agent stats` failed to decode the server's integer timestamps.
+- Shell completions offered `vector`, `ops` and `analytics`, commands that were removed in
+  0.6; `dk init` pointed to vector upserts `dk` cannot do.
+
 ## [0.6.0] - 2026-05-20
 
 ### Added

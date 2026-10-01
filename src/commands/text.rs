@@ -1,11 +1,13 @@
 //! Full-text (BM25) search commands
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::ArgMatches;
+use dakera_client::reqwest::Method;
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::context::Context as Ctx;
+use crate::error::input_error;
 use crate::output;
 
 #[derive(Debug, Serialize)]
@@ -16,86 +18,58 @@ pub struct SearchResultRow {
     pub namespace: String,
 }
 
+/// A result's text: the server returns `id`, `score` and `metadata`; the
+/// memory text is `metadata.content` when the index stored it.
+fn result_row(r: &Value, namespace: &str) -> SearchResultRow {
+    let id = r.get("id").and_then(|v| v.as_str()).unwrap_or("-");
+    let score = match r.get("score").and_then(|v| v.as_f64()) {
+        Some(s) => format!("{s:.4}"),
+        None => "-".to_string(),
+    };
+    let content = r.pointer("/metadata/content").and_then(|v| v.as_str());
+    let content = content.unwrap_or("-");
+    let content = if content.chars().count() > 80 {
+        let head: String = content.chars().take(77).collect();
+        format!("{head}...")
+    } else {
+        content.to_string()
+    };
+    SearchResultRow {
+        id: id.to_string(),
+        score,
+        content,
+        namespace: namespace.to_string(),
+    }
+}
+
 pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
     match matches.subcommand() {
         Some(("search", sub)) => {
             let query = sub.get_one::<String>("query").unwrap();
-            let namespace = sub.get_one::<String>("namespace").cloned();
             let limit = *sub.get_one::<u32>("limit").unwrap();
-
-            let mut body = serde_json::json!({ "query": query, "limit": limit });
-            if let Some(ref ns) = namespace {
-                body.as_object_mut()
-                    .unwrap()
-                    .insert("namespace".to_string(), Value::String(ns.clone()));
-            }
-
-            let path = "/v1/fulltext/search";
-            let t = ctx.log_request("POST", path);
-            let client = super::authed_client();
-            let resp = client
-                .post(format!("{}{}", ctx.url, path))
-                .json(&body)
-                .send()
-                .await
-                .with_context(|| "Failed to POST /v1/fulltext/search")?;
-            let status = resp.status();
-            let text = resp.text().await?;
-            ctx.log_response(t, &status.to_string());
-            if !status.is_success() {
-                anyhow::bail!("Request failed ({}): {}", status, text);
-            }
-
-            let data: Value =
-                serde_json::from_str(&text).with_context(|| "Failed to parse response JSON")?;
-
+            // The server searches one namespace: POST /v1/namespaces/{ns}/fulltext/search.
+            let Some(namespace) = sub.get_one::<String>("namespace") else {
+                return Err(input_error(
+                    "text search needs --namespace: the server searches one namespace at a time",
+                ));
+            };
+            let body = serde_json::json!({ "query": query, "top_k": limit });
+            let ns = crate::api::segment(namespace);
+            let path = format!("/v1/namespaces/{ns}/fulltext/search");
+            let data =
+                crate::api::request_json_logged(ctx, Method::POST, &path, Some(&body)).await?;
             let results = data
                 .get("results")
                 .and_then(|r| r.as_array())
                 .cloned()
                 .unwrap_or_default();
-            let total = data
-                .get("total")
-                .and_then(|t| t.as_u64())
-                .unwrap_or(results.len() as u64);
 
-            output::info(&format!("Found {} result(s)", total));
-
+            output::info(&format!("Found {} result(s)", results.len()));
             if results.is_empty() {
                 output::info("No results found");
             } else {
-                let rows: Vec<SearchResultRow> = results
-                    .iter()
-                    .map(|r| SearchResultRow {
-                        id: r
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("-")
-                            .to_string(),
-                        score: r
-                            .get("score")
-                            .and_then(|v| v.as_f64())
-                            .map(|s| format!("{:.4}", s))
-                            .unwrap_or_else(|| "-".to_string()),
-                        content: {
-                            let c = r
-                                .get("content")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("-")
-                                .to_string();
-                            if c.len() > 80 {
-                                format!("{}...", &c[..77])
-                            } else {
-                                c
-                            }
-                        },
-                        namespace: r
-                            .get("namespace")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("-")
-                            .to_string(),
-                    })
-                    .collect();
+                let rows: Vec<SearchResultRow> =
+                    results.iter().map(|r| result_row(r, namespace)).collect();
                 output::print_data(&rows, ctx.format);
             }
         }

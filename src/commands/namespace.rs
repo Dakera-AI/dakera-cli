@@ -5,6 +5,7 @@ use clap::ArgMatches;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
+use crate::api;
 use crate::context::Context;
 use crate::output;
 
@@ -65,11 +66,29 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 std::process::exit(1);
             }
 
-            output::success(&format!(
-                "Namespace '{}' will be created on first vector upsert",
-                name
-            ));
-            output::info("Use 'dk vector upsert' to add vectors and create the namespace");
+            let dimension = *sub_matches.get_one::<u32>("dimension").unwrap();
+            let mut body = serde_json::json!({ "dimension": dimension });
+            if let Some(distance) = sub_matches.get_one::<String>("distance") {
+                body["distance"] = serde_json::json!(distance);
+            }
+            let path = format!("/v1/namespaces/{}", api::segment(name));
+            let result = api::request_json_logged(
+                ctx,
+                dakera_client::reqwest::Method::PUT,
+                &path,
+                Some(&body),
+            )
+            .await?;
+            let distance = api::str_of(&result, "distance").unwrap_or("cosine");
+            if api::bool_of(&result, "created").unwrap_or(false) {
+                output::success(&format!(
+                    "Namespace '{name}' created (dimension {dimension}, distance {distance})"
+                ));
+            } else {
+                output::info(&format!(
+                    "Namespace '{name}' already exists (dimension {dimension}, distance {distance})"
+                ));
+            }
         }
 
         Some(("delete", sub_matches)) => {
@@ -104,8 +123,14 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 }
             }
 
-            output::warning("Namespace deletion is not yet implemented in the server");
-            output::info("To remove all vectors from a namespace, use 'dk vector delete --all'");
+            let path = format!("/v1/namespaces/{}", api::segment(name));
+            let result =
+                api::request_json_logged(ctx, dakera_client::reqwest::Method::DELETE, &path, None)
+                    .await?;
+            output::success(&format!(
+                "Namespace '{name}' deleted ({} vectors)",
+                api::u64_of(&result, "vectors_deleted").unwrap_or(0)
+            ));
         }
 
         Some(("policy", sub_matches)) => {

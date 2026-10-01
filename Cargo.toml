@@ -1,12 +1,12 @@
 [package]
-name = "dk"
-version = "0.7.1"
+name = "dakera-cli"
+version = "0.8.0"
 edition = "2021"
 license = "MIT"
 description = "Command-line interface for Dakera AI Agent Memory Platform"
 repository = "https://github.com/dakera-ai/dakera-cli"
 homepage = "https://dakera.ai"
-documentation = "https://docs.rs/dk"
+documentation = "https://docs.rs/dakera-cli"
 keywords = ["agent-memory", "vector-search", "knowledge-graph", "ai-agents", "mcp"]
 categories = ["database", "science", "command-line-utilities"]
 
@@ -19,7 +19,7 @@ path = "src/main.rs"
 clap = { version = "4.6", default-features = false, features = ["std", "help", "usage", "error-context", "env"] }
 
 # Dakera client SDK
-dakera-client = "0.11"
+dakera-client = "0.12"
 
 # Async runtime
 tokio = { version = "1.52", features = ["full"] }
@@ -76,7 +76,7 @@ assets = [
 ]
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dk-{ target }.tar.gz"
+pkg-url = "{ repo }/releases/download/v{ version }/dakera-cli-{ target }.tar.gz"
 bin-dir = "dk{ binary-ext }"
 pkg-fmt = "tgz"
 
