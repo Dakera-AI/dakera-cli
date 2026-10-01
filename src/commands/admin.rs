@@ -196,9 +196,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
         Some(("backup-get", sub)) => admin_v012::backup_get(ctx, sub).await?,
         Some(("backup-download", sub)) => admin_v012::backup_download(ctx, sub).await?,
         Some(("backup-upload", sub)) => admin_v012::backup_upload(ctx, sub).await?,
-        Some(("backup-restore-status", sub)) => {
-            admin_v012::backup_restore_status(ctx, sub).await?
-        }
+        Some(("backup-restore-status", sub)) => admin_v012::backup_restore_status(ctx, sub).await?,
         Some(("backup-schedule", sub)) => admin_v012::backup_schedule(ctx, sub).await?,
         Some(("encryption-status", _)) => admin_v012::encryption_status(ctx).await?,
         Some(("encryption-rotate", sub)) => admin_v012::encryption_rotate(ctx, sub).await?,
@@ -261,6 +259,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::{quota_path, quota_request_body};
     use crate::cli::build_admin_command;
 
     #[test]

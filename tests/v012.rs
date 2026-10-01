@@ -33,16 +33,15 @@ fn health_ready_reports_ready_with_checks() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/health/ready");
-        then.status(200)
-            .json_body(json!({
-                "ready": true,
-                "version": "0.12.0",
-                "checks": {
-                    "storage": {"status": "ok", "message": null},
-                    "embedding_engine": {"status": "ok", "message": null},
-                    "tiered_engine": {"status": "disabled", "message": null}
-                }
-            }));
+        then.status(200).json_body(json!({
+            "ready": true,
+            "version": "0.12.0",
+            "checks": {
+                "storage": {"status": "ok", "message": null},
+                "embedding_engine": {"status": "ok", "message": null},
+                "tiered_engine": {"status": "disabled", "message": null}
+            }
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "health", "ready"])
@@ -76,7 +75,9 @@ fn health_ready_while_starting_exits_6_and_shows_retry_after() {
         .failure()
         .code(6)
         .stdout(predicate::str::contains("Reason: downloading models"))
-        .stdout(predicate::str::contains("Downloading BAAI/bge-large/model.onnx: 10 / 100"))
+        .stdout(predicate::str::contains(
+            "Downloading BAAI/bge-large/model.onnx: 10 / 100",
+        ))
         .stderr(predicate::str::contains("retry in 5s"));
 }
 
@@ -126,20 +127,19 @@ fn health_degraded_exits_0_and_lists_components_and_migration() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/health");
-        then.status(200)
-            .json_body(json!({
-                "service": "dakera",
-                "status": "degraded",
-                "version": "0.12.0",
-                "unreadable_records": 0,
-                "corrupt_records": 0,
-                "advice": "components are running degraded",
-                "degraded": [{"component": "reranker", "reason": "model missing"}],
-                "config_warnings": [{"component": "env_name", "reason": "DAKERA_X is ignored"}],
-                "embed_migration": {
-                    "state": "running", "remaining": 50, "reembedded": 10, "skipped": 0, "eta_secs": 90
-                }
-            }));
+        then.status(200).json_body(json!({
+            "service": "dakera",
+            "status": "degraded",
+            "version": "0.12.0",
+            "unreadable_records": 0,
+            "corrupt_records": 0,
+            "advice": "components are running degraded",
+            "degraded": [{"component": "reranker", "reason": "model missing"}],
+            "config_warnings": [{"component": "env_name", "reason": "DAKERA_X is ignored"}],
+            "embed_migration": {
+                "state": "running", "remaining": 50, "reembedded": 10, "skipped": 0, "eta_secs": 90
+            }
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "health"])
@@ -148,7 +148,9 @@ fn health_degraded_exits_0_and_lists_components_and_migration() {
         .stdout(predicate::str::contains("degraded"))
         .stdout(predicate::str::contains("reranker: model missing"))
         .stdout(predicate::str::contains("env_name: DAKERA_X is ignored"))
-        .stdout(predicate::str::contains("Embed migration: running (50 remaining"));
+        .stdout(predicate::str::contains(
+            "Embed migration: running (50 remaining",
+        ));
 }
 
 #[test]
@@ -192,10 +194,9 @@ fn health_detailed_combines_the_probes() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/health");
-        then.status(200)
-            .json_body(json!({
-                "service": "dakera", "status": "healthy", "version": "0.12.0", "build_sha": "abc123"
-            }));
+        then.status(200).json_body(json!({
+            "service": "dakera", "status": "healthy", "version": "0.12.0", "build_sha": "abc123"
+        }));
     });
     server.mock(|when, then| {
         when.method(GET).path("/health/ready");
@@ -209,11 +210,10 @@ fn health_detailed_combines_the_probes() {
     });
     server.mock(|when, then| {
         when.method(GET).path("/ops/diagnostics");
-        then.status(200)
-            .json_body(json!({
-                "resources": {"memory_bytes": 104857600, "thread_count": 12, "open_fds": 30},
-                "active_jobs": 2
-            }));
+        then.status(200).json_body(json!({
+            "resources": {"memory_bytes": 104857600, "thread_count": 12, "open_fds": 30},
+            "active_jobs": 2
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "health", "--detailed"])
@@ -326,11 +326,10 @@ fn attachment_upload_sends_the_bytes_with_the_guessed_media_type() {
             .path("/v1/namespaces/uploads/attachments")
             .header("Content-Type", "audio/wav")
             .body("RIFFfake");
-        then.status(201)
-            .json_body(json!({
-                "attachment_ref": "sha256:abc", "content_type": "audio/wav",
-                "size_bytes": 8, "created": true
-            }));
+        then.status(201).json_body(json!({
+            "attachment_ref": "sha256:abc", "content_type": "audio/wav",
+            "size_bytes": 8, "created": true
+        }));
     });
 
     dk().args([
@@ -355,11 +354,10 @@ fn attachment_upload_over_the_limit_exits_5_with_the_variable_named() {
     std::fs::write(&file, b"x").unwrap();
     server.mock(|when, then| {
         when.method(POST).path("/v1/namespaces/uploads/attachments");
-        then.status(413)
-            .json_body(json!({
-                "error": "the request body is larger than DAKERA_ATTACHMENT_MAX_BYTES (26214400 bytes)",
-                "code": "PAYLOAD_TOO_LARGE", "status": 413
-            }));
+        then.status(413).json_body(json!({
+            "error": "the request body is larger than DAKERA_ATTACHMENT_MAX_BYTES (26214400 bytes)",
+            "code": "PAYLOAD_TOO_LARGE", "status": 413
+        }));
     });
 
     dk().args([
@@ -399,12 +397,11 @@ fn attachment_routes_off_exit_6_and_name_the_switch() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/v1/namespaces/uploads/attachments");
-        then.status(501)
-            .json_body(json!({
-                "error": "attachments are disabled on this server",
-                "code": "FEATURE_DISABLED", "status": 501,
-                "details": "set DAKERA_ATTACHMENTS=1 to turn them on"
-            }));
+        then.status(501).json_body(json!({
+            "error": "attachments are disabled on this server",
+            "code": "FEATURE_DISABLED", "status": 501,
+            "details": "set DAKERA_ATTACHMENTS=1 to turn them on"
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "attachment", "list", "uploads"])
@@ -504,10 +501,9 @@ fn attachment_delete_while_referenced_exits_5() {
     server.mock(|when, then| {
         when.method(DELETE)
             .path("/v1/namespaces/uploads/attachments/sha256:abc");
-        then.status(409)
-            .json_body(json!({
-                "error": "attachment is referenced by 2 memories", "code": "CONFLICT", "status": 409
-            }));
+        then.status(409).json_body(json!({
+            "error": "attachment is referenced by 2 memories", "code": "CONFLICT", "status": 409
+        }));
     });
 
     dk().args([
@@ -576,11 +572,10 @@ fn attachment_transcribe_wait_polls_until_completed() {
     server.mock(|when, then| {
         when.method(GET)
             .path("/v1/namespaces/uploads/attachments/sha256:abc/transcribe/job_1_0");
-        then.status(200)
-            .json_body(json!({
-                "id": "job_1_0", "status": "Completed", "progress": 100,
-                "message": "memory mem_1 stored"
-            }));
+        then.status(200).json_body(json!({
+            "id": "job_1_0", "status": "Completed", "progress": 100,
+            "message": "memory mem_1 stored"
+        }));
     });
 
     dk().args([
@@ -610,12 +605,11 @@ fn attachment_transcribe_wait_failed_job_exits_5() {
     server.mock(|when, then| {
         when.method(GET)
             .path("/v1/namespaces/uploads/attachments/sha256:abc/transcribe/job_1_0");
-        then.status(200)
-            .json_body(json!({
-                "id": "job_1_0", "status": "Failed", "progress": 5,
-                "message": "the audio holds no speech",
-                "error": {"status": 400, "code": "INVALID_REQUEST"}
-            }));
+        then.status(200).json_body(json!({
+            "id": "job_1_0", "status": "Failed", "progress": 5,
+            "message": "the audio holds no speech",
+            "error": {"status": 400, "code": "INVALID_REQUEST"}
+        }));
     });
 
     dk().args([
@@ -643,12 +637,11 @@ fn attachment_index_sends_the_caption() {
         when.method(POST)
             .path("/v1/namespaces/uploads/attachments/sha256:abc/index")
             .json_body(json!({"agent_id": "bot", "content": "page 3"}));
-        then.status(202)
-            .json_body(json!({
-                "job_id": "job_2_0", "attachment_ref": "sha256:abc", "agent_id": "bot",
-                "memory_id": "mem_2", "model": "colmodernvbert",
-                "status_url": "/v1/namespaces/uploads/attachments/sha256:abc/index/job_2_0"
-            }));
+        then.status(202).json_body(json!({
+            "job_id": "job_2_0", "attachment_ref": "sha256:abc", "agent_id": "bot",
+            "memory_id": "mem_2", "model": "colmodernvbert",
+            "status_url": "/v1/namespaces/uploads/attachments/sha256:abc/index/job_2_0"
+        }));
     });
 
     dk().args([
@@ -675,10 +668,9 @@ fn attachment_job_reads_the_status_route_of_its_kind() {
     server.mock(|when, then| {
         when.method(GET)
             .path("/v1/namespaces/uploads/attachments/sha256:abc/index/job_2_0");
-        then.status(200)
-            .json_body(json!({
-                "id": "job_2_0", "status": "Running", "progress": 10, "message": "embedding"
-            }));
+        then.status(200).json_body(json!({
+            "id": "job_2_0", "status": "Running", "progress": 10, "message": "embedding"
+        }));
     });
 
     dk().args([
@@ -706,11 +698,10 @@ fn namespace_pinned_key_on_a_node_wide_route_exits_4_and_explains() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/admin/encryption/status");
-        then.status(403)
-            .json_body(json!({
-                "error": "Access denied to namespace", "code": "NAMESPACE_ACCESS_DENIED",
-                "status": 403, "details": "namespace: *"
-            }));
+        then.status(403).json_body(json!({
+            "error": "Access denied to namespace", "code": "NAMESPACE_ACCESS_DENIED",
+            "status": 403, "details": "namespace: *"
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "admin", "encryption-status"])
@@ -726,11 +717,10 @@ fn backup_download_with_an_admin_key_exits_4_and_asks_for_super_admin() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/b1/download");
-        then.status(403)
-            .json_body(json!({
-                "error": "Insufficient scope for this operation", "code": "INSUFFICIENT_SCOPE",
-                "status": 403, "details": "required: super_admin, actual: admin"
-            }));
+        then.status(403).json_body(json!({
+            "error": "Insufficient scope for this operation", "code": "INSUFFICIENT_SCOPE",
+            "status": 403, "details": "required: super_admin, actual: admin"
+        }));
     });
     let out = scratch("denied.json.gz");
 
@@ -756,11 +746,10 @@ fn json_error_output_carries_the_servers_fields() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/admin/reembed/migration");
-        then.status(403)
-            .json_body(json!({
-                "error": "Access denied to namespace", "code": "NAMESPACE_ACCESS_DENIED",
-                "status": 403, "details": "namespace: *"
-            }));
+        then.status(403).json_body(json!({
+            "error": "Access denied to namespace", "code": "NAMESPACE_ACCESS_DENIED",
+            "status": 403, "details": "namespace: *"
+        }));
     });
 
     dk().args([
@@ -775,7 +764,9 @@ fn json_error_output_carries_the_servers_fields() {
     .failure()
     .code(4)
     .stderr(predicate::str::contains("\"http_status\": 403"))
-    .stderr(predicate::str::contains("\"server_code\": \"NAMESPACE_ACCESS_DENIED\""))
+    .stderr(predicate::str::contains(
+        "\"server_code\": \"NAMESPACE_ACCESS_DENIED\"",
+    ))
     .stderr(predicate::str::contains("\"details\": \"namespace: *\""));
 }
 
@@ -784,11 +775,10 @@ fn a_failed_admin_call_does_not_print_a_success_line() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(POST).path("/admin/namespaces/docs/optimize");
-        then.status(403)
-            .json_body(json!({
-                "error": "Insufficient scope for this operation", "code": "INSUFFICIENT_SCOPE",
-                "details": "required: admin, actual: read"
-            }));
+        then.status(403).json_body(json!({
+            "error": "Insufficient scope for this operation", "code": "INSUFFICIENT_SCOPE",
+            "details": "required: admin, actual: read"
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "admin", "optimize", "docs"])
@@ -883,13 +873,12 @@ fn encryption_rotate_one_namespace() {
         when.method(POST)
             .path("/admin/encryption/rotate-key")
             .json_body(json!({"namespace": "team-a", "wait_secs": 0}));
-        then.status(200)
-            .json_body(json!({
-                "key_id": "k4", "previous_key_id": "k3", "scope": "namespace", "namespace": "team-a",
-                "reseal": "running", "rotated": 0, "skipped": 0, "namespaces": [],
-                "fulltext_indices_rotated": 0, "failed_namespaces": [],
-                "status_url": "/admin/encryption/status"
-            }));
+        then.status(200).json_body(json!({
+            "key_id": "k4", "previous_key_id": "k3", "scope": "namespace", "namespace": "team-a",
+            "reseal": "running", "rotated": 0, "skipped": 0, "namespaces": [],
+            "fulltext_indices_rotated": 0, "failed_namespaces": [],
+            "status_url": "/admin/encryption/status"
+        }));
     });
 
     dk().args([
@@ -917,13 +906,12 @@ fn encryption_rotate_reads_the_new_key_from_the_environment() {
         when.method(POST)
             .path("/admin/encryption/rotate-key")
             .json_body(json!({"new_key": "a-long-enough-passphrase"}));
-        then.status(200)
-            .json_body(json!({
-                "key_id": "k5", "previous_key_id": "k4", "scope": "global", "namespace": null,
-                "reseal": "completed", "rotated": 12, "skipped": 0, "namespaces": ["a"],
-                "fulltext_indices_rotated": 1, "failed_namespaces": [],
-                "status_url": "/admin/encryption/status"
-            }));
+        then.status(200).json_body(json!({
+            "key_id": "k5", "previous_key_id": "k4", "scope": "global", "namespace": null,
+            "reseal": "completed", "rotated": 12, "skipped": 0, "namespaces": ["a"],
+            "fulltext_indices_rotated": 1, "failed_namespaces": [],
+            "status_url": "/admin/encryption/status"
+        }));
     });
 
     dk().env("DK_TEST_NEW_KEY", "a-long-enough-passphrase")
@@ -992,12 +980,10 @@ fn encryption_reseal_posts_the_namespace() {
 fn backup_create_sends_the_required_name() {
     let server = MockServer::start();
     let m = server.mock(|when, then| {
-        when.method(POST)
-            .path("/admin/backups")
-            .json_body(json!({
-                "name": "nightly", "backup_type": "full", "namespaces": ["a", "b"],
-                "encrypt": true, "compression": "zstd"
-            }));
+        when.method(POST).path("/admin/backups").json_body(json!({
+            "name": "nightly", "backup_type": "full", "namespaces": ["a", "b"],
+            "encrypt": true, "compression": "zstd"
+        }));
         then.status(202).json_body(json!({"backup": {
             "backup_id": "b1", "name": "nightly", "status": "inprogress"
         }}));
@@ -1037,10 +1023,9 @@ fn backup_create_wait_polls_until_completed() {
     });
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/b1");
-        then.status(200)
-            .json_body(json!({
-                "backup_id": "b1", "name": "x", "status": "completed", "size_bytes": 1024
-            }));
+        then.status(200).json_body(json!({
+            "backup_id": "b1", "name": "x", "status": "completed", "size_bytes": 1024
+        }));
     });
 
     dk().args([
@@ -1067,10 +1052,9 @@ fn backup_create_wait_failed_backup_exits_nonzero_with_the_reason() {
     });
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/b1");
-        then.status(200)
-            .json_body(json!({
-                "backup_id": "b1", "status": "failed", "error": "S3 bucket unreachable"
-            }));
+        then.status(200).json_body(json!({
+            "backup_id": "b1", "status": "failed", "error": "S3 bucket unreachable"
+        }));
     });
 
     dk().args([
@@ -1144,11 +1128,10 @@ fn backup_restore_targets_namespaces() {
         when.method(POST)
             .path("/admin/backups/restore")
             .json_body(json!({"backup_id": "b1", "target_namespaces": ["a"]}));
-        then.status(202)
-            .json_body(json!({
-                "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
-                "namespaces": ["a"], "started_at": 1
-            }));
+        then.status(202).json_body(json!({
+            "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
+            "namespaces": ["a"], "started_at": 1
+        }));
     });
 
     dk().args([
@@ -1190,19 +1173,17 @@ fn backup_restore_overwrite_with_yes_and_wait() {
         when.method(POST)
             .path("/admin/backups/restore")
             .json_body(json!({"backup_id": "b1", "overwrite": true}));
-        then.status(202)
-            .json_body(json!({
-                "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
-                "namespaces": [], "started_at": 1
-            }));
+        then.status(202).json_body(json!({
+            "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
+            "namespaces": [], "started_at": 1
+        }));
     });
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/restore/r1");
-        then.status(200)
-            .json_body(json!({
-                "restore_id": "r1", "status": "completed", "backup_id": "b1",
-                "namespaces": [], "started_at": 1, "progress_percent": 100
-            }));
+        then.status(200).json_body(json!({
+            "restore_id": "r1", "status": "completed", "backup_id": "b1",
+            "namespaces": [], "started_at": 1, "progress_percent": 100
+        }));
     });
 
     dk().args([
@@ -1226,11 +1207,10 @@ fn backup_restore_status_reads_the_restore() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/restore/r1");
-        then.status(200)
-            .json_body(json!({
-                "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
-                "namespaces": [], "started_at": 1, "progress_percent": 40
-            }));
+        then.status(200).json_body(json!({
+            "restore_id": "r1", "status": "inprogress", "backup_id": "b1",
+            "namespaces": [], "started_at": 1, "progress_percent": 40
+        }));
     });
 
     dk().args([
@@ -1250,21 +1230,19 @@ fn backup_schedule_get_and_set() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(GET).path("/admin/backups/schedule");
-        then.status(200)
-            .json_body(json!({
-                "enabled": true, "cron": "0 3 * * *", "backup_type": "full",
-                "retention_days": 7, "max_backups": 5, "namespaces": [], "encrypt": false
-            }));
+        then.status(200).json_body(json!({
+            "enabled": true, "cron": "0 3 * * *", "backup_type": "full",
+            "retention_days": 7, "max_backups": 5, "namespaces": [], "encrypt": false
+        }));
     });
     let set = server.mock(|when, then| {
         when.method(POST)
             .path("/admin/backups/schedule")
             .json_body(json!({"enabled": false}));
-        then.status(200)
-            .json_body(json!({
-                "enabled": false, "backup_type": "full", "retention_days": 7, "max_backups": 5,
-                "namespaces": [], "encrypt": false
-            }));
+        then.status(200).json_body(json!({
+            "enabled": false, "backup_type": "full", "retention_days": 7, "max_backups": 5,
+            "namespaces": [], "encrypt": false
+        }));
     });
 
     dk().args(["--url", &server.base_url(), "admin", "backup-schedule"])
@@ -1307,11 +1285,10 @@ fn quotas_set_without_a_namespace_targets_the_default_quota() {
         when.method(PUT)
             .path("/admin/quotas/default")
             .json_body(json!({"config": {"max_vectors": 1000, "enforcement": "hard"}}));
-        then.status(200)
-            .json_body(json!({
-                "success": true, "namespace": "_default",
-                "config": {"max_vectors": 1000, "enforcement": "hard"}, "message": "ok"
-            }));
+        then.status(200).json_body(json!({
+            "success": true, "namespace": "_default",
+            "config": {"max_vectors": 1000, "enforcement": "hard"}, "message": "ok"
+        }));
     });
 
     dk().args([
@@ -1333,10 +1310,9 @@ fn a_quota_413_exits_5_and_points_at_quotas_get() {
     let server = MockServer::start();
     server.mock(|when, then| {
         when.method(PUT).path("/admin/quotas/docs");
-        then.status(413)
-            .json_body(json!({
-                "error": "quota exceeded", "code": "QUOTA_EXCEEDED", "status": 413
-            }));
+        then.status(413).json_body(json!({
+            "error": "quota exceeded", "code": "QUOTA_EXCEEDED", "status": 413
+        }));
     });
 
     dk().args([

@@ -142,13 +142,13 @@ fn memory_job_args(cmd: Command) -> Command {
         .arg(timeout)
 }
 
-fn build_transcribe_command() -> Command {
+fn build_attachment_transcribe_command() -> Command {
     let base = Command::new("transcribe")
         .about("Transcribe a WAV attachment into a memory (speech to text)");
     memory_job_args(base)
 }
 
-fn build_index_command() -> Command {
+fn build_attachment_index_command() -> Command {
     let base = Command::new("index")
         .about("Index a PNG attachment as a visual memory (needs DAKERA_VISION)");
     let content = Arg::new("content")
@@ -232,8 +232,8 @@ pub fn build_attachment_command() -> Command {
         .subcommand(list)
         .subcommand(download)
         .subcommand(delete)
-        .subcommand(build_transcribe_command())
-        .subcommand(build_index_command())
+        .subcommand(build_attachment_transcribe_command())
+        .subcommand(build_attachment_index_command())
         .subcommand(build_attachment_job_command())
 }
 
@@ -1105,7 +1105,9 @@ fn build_backup_create_command() -> Command {
         .about("Create a backup (runs in the background; needs a global admin key)")
         .arg(name)
         .arg(kind)
-        .arg(namespace_flag("Back up only this namespace (repeatable; default: all)"))
+        .arg(namespace_flag(
+            "Back up only this namespace (repeatable; default: all)",
+        ))
         .arg(encrypt)
         .arg(compression)
         .arg(wait_arg())
@@ -1151,7 +1153,9 @@ fn build_backup_restore_command() -> Command {
     Command::new("backup-restore")
         .about("Restore from a backup (needs a global super_admin key)")
         .arg(backup_id_arg())
-        .arg(namespace_flag("Restore only this namespace (repeatable; default: all)"))
+        .arg(namespace_flag(
+            "Restore only this namespace (repeatable; default: all)",
+        ))
         .arg(overwrite)
         .arg(yes)
         .arg(wait_arg())
@@ -1192,7 +1196,9 @@ fn build_encryption_rotate_command() -> Command {
         .help("Environment variable holding the new passphrase or 64-char hex key");
     Command::new("encryption-rotate")
         .about("Rotate the encryption key, of one namespace or of everything")
-        .arg(namespace_flag_single("Rotate only this namespace (default: all)"))
+        .arg(namespace_flag_single(
+            "Rotate only this namespace (default: all)",
+        ))
         .arg(key_env)
         .arg(wait_secs_arg())
 }

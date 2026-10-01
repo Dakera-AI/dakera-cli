@@ -148,7 +148,9 @@ async fn delete(ctx: &Context, sub: &ArgMatches) -> Result<()> {
     let reference = sub.get_one::<String>("reference").unwrap();
     let path = attachment_path(namespace, reference);
     api::request_json_logged(ctx, Method::DELETE, &path, None).await?;
-    output::success(&format!("Attachment '{reference}' deleted from '{namespace}'"));
+    output::success(&format!(
+        "Attachment '{reference}' deleted from '{namespace}'"
+    ));
     Ok(())
 }
 
@@ -194,7 +196,9 @@ async fn start_job(ctx: &Context, sub: &ArgMatches, kind: &str) -> Result<()> {
     let accepted = api::request_json_logged(ctx, Method::POST, &path, Some(&body)).await?;
     if !sub.get_flag("wait") {
         if matches!(ctx.format, OutputFormat::Table) {
-            output::success(&format!("Job started ({kind}); poll it with `dk attachment job`"));
+            output::success(&format!(
+                "Job started ({kind}); poll it with `dk attachment job`"
+            ));
         }
         output::print_item(&accepted, ctx.format);
         return Ok(());

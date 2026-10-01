@@ -115,7 +115,10 @@ pub async fn encryption_status(ctx: &Context) -> Result<()> {
         ("Default key", show(&status, "/default_key_id")),
         ("Environment key", show(&status, "/environment_key_id")),
         ("Re-seal passes", show(&status, "/reseal/passes_completed")),
-        ("Re-seal retry pending", show(&status, "/reseal/retry_pending")),
+        (
+            "Re-seal retry pending",
+            show(&status, "/reseal/retry_pending"),
+        ),
     ];
     output::print_kv(&pairs, ctx.format);
     if let Some(current) = status.pointer("/reseal/current") {
@@ -164,7 +167,11 @@ pub fn rotate_body(sub: &ArgMatches) -> Result<Value> {
     if let Some(var) = sub.get_one::<String>("new-key-env") {
         match std::env::var(var) {
             Ok(key) if !key.is_empty() => body["new_key"] = json!(key),
-            _ => return Err(input_error(format!("environment variable {var} is not set"))),
+            _ => {
+                return Err(input_error(format!(
+                    "environment variable {var} is not set"
+                )))
+            }
         }
     }
     if let Some(secs) = sub.get_one::<u64>("wait-secs") {
