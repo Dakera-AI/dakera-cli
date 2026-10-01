@@ -344,6 +344,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "dakera-cli"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "comfy-table",
+ "dakera-client",
+ "dirs",
+ "httpmock",
+ "indicatif",
+ "nu-ansi-term",
+ "predicates",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "dakera-client"
 version = "0.11.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -405,29 +428,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "dk"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "comfy-table",
- "dakera-client",
- "dirs",
- "httpmock",
- "indicatif",
- "nu-ansi-term",
- "predicates",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

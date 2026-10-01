@@ -81,11 +81,11 @@ Pre-built binaries for macOS (arm64/x64), Linux (x64/arm64), and Windows are ava
 
 | Platform | File |
 |---|---|
-| macOS (Apple Silicon) | `dk-aarch64-apple-darwin.tar.gz` |
-| macOS (Intel) | `dk-x86_64-apple-darwin.tar.gz` |
-| Linux x64 | `dk-x86_64-unknown-linux-musl.tar.gz` |
-| Linux arm64 | `dk-aarch64-unknown-linux-musl.tar.gz` |
-| Windows x64 | `dk-x86_64-pc-windows-msvc.zip` |
+| macOS (Apple Silicon) | `dakera-cli-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `dakera-cli-x86_64-apple-darwin.tar.gz` |
+| Linux x64 | `dakera-cli-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 | `dakera-cli-aarch64-unknown-linux-musl.tar.gz` |
+| Windows x64 | `dakera-cli-x86_64-pc-windows-msvc.zip` |
 
 ---
 

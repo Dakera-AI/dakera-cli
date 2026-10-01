@@ -22,5 +22,5 @@ publish-jobs = ["homebrew"]
 install-path = "CARGO_HOME"
 tap = "dakera-ai/homebrew-tap"
 formula = "dk"
-# Emit .tar.gz on unix targets (binstall, deploy.yml, and homebrew all expect dk-{target}.tar.gz)
+# Emit .tar.gz on unix targets (binstall, deploy.yml, and homebrew expect dakera-cli-{target}.tar.gz; the binary inside is dk)
 unix-archive = ".tar.gz"
