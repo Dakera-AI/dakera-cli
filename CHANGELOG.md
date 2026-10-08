@@ -66,9 +66,7 @@ older server (see the README compatibility table). Built on `dakera-client` 0.12
 
 ### Dependency
 
-- `dakera-client` is taken from the dakera-rs PR branch (git dependency) until 0.12.2 is
-  published on crates.io; it must be switched back to `dakera-client = "0.12.2"` before
-  this release is merged and published.
+- `dakera-client` 0.12.2 (crates.io).
 
 ## [0.8.0] - 2026-10-01
 

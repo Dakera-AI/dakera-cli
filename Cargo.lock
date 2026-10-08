@@ -369,7 +369,8 @@ dependencies = [
 [[package]]
 name = "dakera-client"
 version = "0.12.2"
-source = "git+https://github.com/Dakera-AI/dakera-rs?branch=claude%2Fdakera-deploy-issues-audit-gfm5yq#7da7a4fe935da6b02a4964266172082df2d1ab70"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e8f082a3d37049a29bf8e89eb548dca7d52fde6b68c3bb12cb07c2332420a3d"
 dependencies = [
  "futures-util",
  "reqwest",

@@ -19,11 +19,7 @@ path = "src/main.rs"
 clap = { version = "4.6", default-features = false, features = ["std", "help", "usage", "error-context", "env"] }
 
 # Dakera client SDK
-# TEMPORARY (before merge): the Dakera 0.12.2 SDK (dakera-client 0.12.2) is not on
-# crates.io yet, so this points at the dakera-rs PR branch. Switch back to
-# `dakera-client = "0.12.2"` once that version is published (crates.io refuses to
-# publish a crate with a git dependency).
-dakera-client = { git = "https://github.com/Dakera-AI/dakera-rs", branch = "claude/dakera-deploy-issues-audit-gfm5yq" }
+dakera-client = "0.12.2"
 
 # Async runtime
 tokio = { version = "1.52", features = ["full"] }
