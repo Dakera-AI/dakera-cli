@@ -201,8 +201,10 @@ mod tests {
 
     #[test]
     fn test_config_file_roundtrip() {
-        let mut cfg = ConfigFile::default();
-        cfg.active_profile = "prod".to_string();
+        let mut cfg = ConfigFile {
+            active_profile: "prod".to_string(),
+            ..Default::default()
+        };
         cfg.profiles.insert(
             "prod".to_string(),
             Profile {
@@ -235,8 +237,10 @@ mod tests {
 
     #[test]
     fn test_config_file_multiple_profiles_roundtrip() {
-        let mut cfg = ConfigFile::default();
-        cfg.active_profile = "staging".to_string();
+        let mut cfg = ConfigFile {
+            active_profile: "staging".to_string(),
+            ..Default::default()
+        };
         cfg.profiles.insert(
             "prod".to_string(),
             Profile {
@@ -288,7 +292,7 @@ mod tests {
             "active_profile = \"missing\"\n[profiles.prod]\nurl = \"https://prod.example.com\"\n";
         let cfg: ConfigFile = toml::from_str(toml_str).unwrap();
         assert_eq!(cfg.active_profile, "missing");
-        assert!(cfg.profiles.get("missing").is_none());
+        assert!(!cfg.profiles.contains_key("missing"));
     }
 
     #[test]

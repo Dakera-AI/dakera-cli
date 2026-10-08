@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
-use dakera_client::DakeraClient;
+use dakera_client::{AgentMemoriesOptions, DakeraClient};
 use serde::Serialize;
 
 use crate::api;
@@ -23,6 +23,12 @@ pub struct AgentMemoryRow {
     pub content: String,
     pub memory_type: String,
     pub importance: f32,
+    /// Full length of the content in characters (with `--preview` only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_len: Option<usize>,
+    /// Whether `content` is a cut preview (with `--preview` only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub truncated: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -61,13 +67,58 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             }
         }
 
+        Some(("create", sub_matches)) => {
+            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
+
+            let t = ctx.log_request("POST", "/v1/agents");
+            let created = client.create_agent(agent_id).await;
+            ctx.log_response(t, if created.is_ok() { "200 OK" } else { "ERR" });
+            let created = created?;
+
+            if !matches!(ctx.format, crate::OutputFormat::Table) {
+                output::print_item(&created, ctx.format);
+                return Ok(());
+            }
+            if created.created {
+                output::success(&format!("Agent '{}' created", created.agent_id));
+            } else {
+                output::info(&format!(
+                    "Agent '{}' already exists (left unchanged)",
+                    created.agent_id
+                ));
+            }
+            output::print_kv(
+                &[
+                    ("Agent ID", created.agent_id.clone()),
+                    ("Namespace", created.namespace.clone()),
+                    (
+                        "Dimension",
+                        created
+                            .dimension
+                            .map(|d| d.to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                    ),
+                    (
+                        "Model",
+                        created.model.clone().unwrap_or_else(|| "-".to_string()),
+                    ),
+                ],
+                ctx.format,
+            );
+        }
+
         Some(("memories", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
-            let memory_type = sub_matches.get_one::<String>("type").map(|s| s.as_str());
-            let limit = sub_matches.get_one::<u32>("limit").copied();
+            let options = AgentMemoriesOptions {
+                memory_type: sub_matches.get_one::<String>("type").cloned(),
+                limit: sub_matches.get_one::<u32>("limit").copied(),
+                offset: sub_matches.get_one::<u32>("offset").copied(),
+                include_derived: sub_matches.get_flag("include-derived").then_some(true),
+                content_preview_chars: sub_matches.get_one::<u32>("preview").copied(),
+            };
 
             let t = ctx.log_request("GET", &format!("/v1/agents/{}/memories", agent_id));
-            let memories = client.agent_memories(agent_id, memory_type, limit).await;
+            let memories = client.agent_memories_with(agent_id, &options).await;
             match &memories {
                 Ok(_) => ctx.log_response(t, "200 OK"),
                 Err(_) => ctx.log_response(t, "ERR"),
@@ -82,6 +133,10 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                     memories.len(),
                     agent_id
                 ));
+                let truncated = memories
+                    .iter()
+                    .filter(|m| m.content_truncated == Some(true))
+                    .count();
                 let rows: Vec<AgentMemoryRow> = memories
                     .into_iter()
                     .map(|m| AgentMemoryRow {
@@ -89,8 +144,15 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                         content: m.content,
                         memory_type: format!("{:?}", m.memory_type),
                         importance: m.importance,
+                        content_len: m.content_len,
+                        truncated: m.content_truncated,
                     })
                     .collect();
+                if truncated > 0 && matches!(ctx.format, crate::OutputFormat::Table) {
+                    output::info(&format!(
+                        "{truncated} memories are previews; `dk memory get` shows the full text"
+                    ));
+                }
                 output::print_data(&rows, ctx.format);
             }
         }
@@ -230,6 +292,36 @@ mod tests {
             .expect("agent memories should parse successfully");
         let sub = m.subcommand_matches("memories").unwrap();
         assert_eq!(*sub.get_one::<u32>("limit").unwrap(), 50u32);
+    }
+
+    #[test]
+    fn agent_create_requires_agent_id() {
+        assert!(build_agent_command()
+            .try_get_matches_from(["agent", "create"])
+            .is_err());
+        build_agent_command()
+            .try_get_matches_from(["agent", "create", "mlx-dev"])
+            .expect("agent create should parse");
+    }
+
+    #[test]
+    fn agent_memories_include_derived_and_preview() {
+        let m = build_agent_command()
+            .try_get_matches_from([
+                "agent",
+                "memories",
+                "a",
+                "--include-derived",
+                "--preview",
+                "200",
+                "--offset",
+                "50",
+            ])
+            .unwrap();
+        let sub = m.subcommand_matches("memories").unwrap();
+        assert!(sub.get_flag("include-derived"));
+        assert_eq!(*sub.get_one::<u32>("preview").unwrap(), 200);
+        assert_eq!(*sub.get_one::<u32>("offset").unwrap(), 50);
     }
 
     #[test]

@@ -49,6 +49,7 @@ pub fn build_cli() -> Command {
         )
         .subcommand(build_health_command())
         .subcommand(build_capabilities_command())
+        .subcommand(build_whoami_command())
         .subcommand(build_attachment_command())
         .subcommand(build_namespace_command())
         .subcommand(build_index_command())
@@ -61,6 +62,44 @@ pub fn build_cli() -> Command {
         .subcommand(build_config_command())
         .subcommand(build_completion_command())
         .subcommand(build_text_command())
+}
+
+/// A duration in seconds: a plain number, or a number with an `s`, `m`, `h`
+/// or `d` suffix (`3600`, `90m`, `4h`, `7d`).
+pub fn parse_duration_secs(value: &str) -> Result<u64, String> {
+    let v = value.trim();
+    let (digits, unit) = match v.char_indices().last() {
+        Some((i, c)) if c.is_ascii_alphabetic() => (&v[..i], c.to_ascii_lowercase()),
+        _ => (v, 's'),
+    };
+    let n: u64 = digits
+        .trim()
+        .parse()
+        .map_err(|_| format!("'{value}' is not a duration (e.g. 3600, 90m, 4h, 7d)"))?;
+    let mult = match unit {
+        's' => 1,
+        'm' => 60,
+        'h' => 3600,
+        'd' => 86_400,
+        _ => return Err(format!("'{value}': unknown unit (use s, m, h or d)")),
+    };
+    n.checked_mul(mult)
+        .ok_or_else(|| format!("'{value}' is too large"))
+}
+
+/// `--preview N`: the server cuts each memory's content to N characters
+/// (server v0.12.2, `content_preview_chars`).
+fn preview_arg() -> Arg {
+    Arg::new("preview")
+        .long("preview")
+        .value_name("CHARS")
+        .value_parser(value_parser!(u32).range(1..=10_000))
+        .help("Ask the server for a content preview of at most CHARS characters (1-10000; server v0.12.2)")
+}
+
+pub fn build_whoami_command() -> Command {
+    Command::new("whoami")
+        .about("Show the API key this CLI authenticates with (GET /v1/auth/whoami, server v0.12.2)")
 }
 
 pub fn build_health_command() -> Command {
@@ -822,7 +861,19 @@ pub fn build_session_command() -> Command {
                         .short('m')
                         .long("metadata")
                         .help("Session metadata as JSON string"),
+                )
+                .arg(
+                    Arg::new("idle-timeout")
+                        .long("idle-timeout")
+                        .value_name("DURATION")
+                        .value_parser(parse_duration_secs)
+                        .help("End the session after this much inactivity (e.g. 7200, 90m, 8h; 0 = never; at most 30d; server v0.12.2, default 4h)"),
                 ),
+        )
+        .subcommand(
+            Command::new("touch")
+                .about("Record activity so the server does not end the session for inactivity (server v0.12.2)")
+                .arg(Arg::new("session_id").required(true).help("Session ID")),
         )
         .subcommand(
             Command::new("end")
@@ -867,7 +918,21 @@ pub fn build_session_command() -> Command {
         .subcommand(
             Command::new("memories")
                 .about("Get memories for a session")
-                .arg(Arg::new("session_id").required(true).help("Session ID")),
+                .arg(Arg::new("session_id").required(true).help("Session ID"))
+                .arg(
+                    Arg::new("limit")
+                        .short('l')
+                        .long("limit")
+                        .value_parser(value_parser!(u32))
+                        .help("Maximum number of memories to return (server default 50)"),
+                )
+                .arg(
+                    Arg::new("offset")
+                        .long("offset")
+                        .value_parser(value_parser!(u32))
+                        .help("Memories to skip"),
+                )
+                .arg(preview_arg()),
         )
 }
 
@@ -875,6 +940,11 @@ pub fn build_agent_command() -> Command {
     Command::new("agent")
         .about("Manage agents")
         .subcommand(Command::new("list").about("List all agents"))
+        .subcommand(
+            Command::new("create")
+                .about("Create an agent (its memory namespace) before its first memory (server v0.12.2)")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID")),
+        )
         .subcommand(
             Command::new("memories")
                 .about("Get memories for an agent")
@@ -893,7 +963,20 @@ pub fn build_agent_command() -> Command {
                         .default_value("50")
                         .value_parser(value_parser!(u32))
                         .help("Maximum number of memories to return"),
-                ),
+                )
+                .arg(
+                    Arg::new("offset")
+                        .long("offset")
+                        .value_parser(value_parser!(u32))
+                        .help("Memories to skip"),
+                )
+                .arg(
+                    Arg::new("include-derived")
+                        .long("include-derived")
+                        .action(ArgAction::SetTrue)
+                        .help("Also list derived sentence sub-memories (left out by default since server v0.12.2)"),
+                )
+                .arg(preview_arg()),
         )
         .subcommand(
             Command::new("stats")
@@ -978,7 +1061,8 @@ pub fn build_knowledge_command() -> Command {
                         .long("max-edges")
                         .value_parser(value_parser!(u32))
                         .help("Maximum edges per node"),
-                ),
+                )
+                .arg(preview_arg()),
         )
         .subcommand(
             Command::new("summarize")
@@ -1112,6 +1196,30 @@ pub fn build_admin_command() -> Command {
         .subcommand(build_encryption_rotate_command())
         .subcommand(build_encryption_reseal_command())
         .subcommand(build_embed_migration_command())
+        .subcommand(
+            Command::new("derivations-status")
+                .about("Show the derived data the server owes: sentence sub-memories, full-text entries, graph edges (global admin key; server v0.12.2)"),
+        )
+        .subcommand(
+            Command::new("derivations-drain")
+                .about("Derive everything owed now, until settled or the timeout (global admin key; server v0.12.2)")
+                .arg(
+                    Arg::new("timeout")
+                        .long("timeout")
+                        .value_name("DURATION")
+                        .value_parser(parse_duration_secs)
+                        .help("Stop after this long (e.g. 600, 10m; server default 600s)"),
+                ),
+        )
+        .subcommand(
+            Command::new("session-idle-timeout")
+                .about("Show or set the server-wide session inactivity timeout (server v0.12.2, default 4h)")
+                .arg(
+                    Arg::new("duration")
+                        .value_parser(parse_duration_secs)
+                        .help("New timeout (e.g. 14400, 4h, 1d; 0 = sessions without their own timeout never end for inactivity; at most 30d). Omit to show it."),
+                ),
+        )
         .subcommand(
             Command::new("backup-delete").about("Delete a backup").arg(
                 Arg::new("backup_id")
@@ -1344,7 +1452,52 @@ pub fn build_keys_command() -> Command {
         .subcommand(
             Command::new("rotate")
                 .about("Rotate an API key (generate new secret)")
-                .arg(Arg::new("key_id").required(true).help("API key ID")),
+                .arg(Arg::new("key_id").required(true).help("API key ID"))
+                .arg(
+                    Arg::new("grace")
+                        .long("grace")
+                        .value_name("DURATION")
+                        .value_parser(parse_duration_secs)
+                        .help("Keep the old key working this long (e.g. 3600, 1h, 7d; at most 7d; server v0.12.2)"),
+                ),
+        )
+        .subcommand(
+            Command::new("edit")
+                .visible_alias("patch")
+                .about("Rename a key or replace its namespaces (PATCH; server v0.12.2)")
+                .arg(Arg::new("key_id").required(true).help("API key ID"))
+                .arg(
+                    Arg::new("name")
+                        .long("name")
+                        .help("New name"),
+                )
+                .arg(
+                    Arg::new("namespaces")
+                        .long("namespaces")
+                        .value_name("LIST")
+                        .value_delimiter(',')
+                        .conflicts_with_all(["all-namespaces", "no-namespaces"])
+                        .help("Replace the namespace grants (comma-separated; `p*` prefix patterns allowed, e.g. _dakera_agent_mlx-*)"),
+                )
+                .arg(
+                    Arg::new("all-namespaces")
+                        .long("all-namespaces")
+                        .action(ArgAction::SetTrue)
+                        .conflicts_with("no-namespaces")
+                        .help("Grant every namespace (sends namespaces: null; unrestricted callers only)"),
+                )
+                .arg(
+                    Arg::new("no-namespaces")
+                        .long("no-namespaces")
+                        .action(ArgAction::SetTrue)
+                        .help("Grant no namespace (sends namespaces: [])"),
+                )
+                .arg(
+                    Arg::new("namespace")
+                        .short('n')
+                        .long("namespace")
+                        .help("Edit through PATCH /v1/namespaces/{namespace}/keys/{key_id} (namespace admins) instead of /admin/keys/{key_id}"),
+                ),
         )
         .subcommand(
             Command::new("usage")

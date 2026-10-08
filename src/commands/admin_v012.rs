@@ -1,6 +1,7 @@
 //! Operator commands added for Dakera v0.12, all under `dk admin`:
-//! the embed migration, encryption status and keyring rotation, and the
-//! backup routes (create, get, download, upload, restore, schedule).
+//! the embed migration, encryption status and keyring rotation, the
+//! backup routes (create, get, download, upload, restore, schedule) and, for
+//! v0.12.2, the derived-data status / drain and the session idle timeout.
 //!
 //! Permissions (v0.12): every route here needs a *global* key. A key pinned to
 //! namespaces gets `403` even with the admin scope, and backup download,
@@ -482,6 +483,193 @@ pub async fn backup_schedule(ctx: &Context, sub: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Derived data and session idle timeout (server v0.12.2)
+// ---------------------------------------------------------------------------
+
+/// Format seconds as a short duration (`4h`, `90m`, `45s`, `0 (never)`).
+pub(crate) fn human_secs(secs: u64) -> String {
+    match secs {
+        0 => "0 (never)".to_string(),
+        s if s % 86_400 == 0 => format!("{}d", s / 86_400),
+        s if s % 3600 == 0 => format!("{}h", s / 3600),
+        s if s % 60 == 0 => format!("{}m", s / 60),
+        s => format!("{s}s"),
+    }
+}
+
+/// The owed counts of a derivation status as key/value pairs.
+fn derivation_pairs(s: &dakera_client::DerivationStatus) -> Vec<(&'static str, String)> {
+    let reconciler = match s.reconciler.last_tick_at {
+        Some(at) => format!("{} (last tick {at})", s.reconciler.state),
+        None => s.reconciler.state.clone(),
+    };
+    let heal = match &s.heal {
+        None => "not loaded".to_string(),
+        Some(h) if h.complete => format!("complete ({} parents healed)", h.parents_healed),
+        Some(h) => format!(
+            "in progress at {} ({} parents healed)",
+            h.namespace.as_deref().unwrap_or("-"),
+            h.parents_healed
+        ),
+    };
+    vec![
+        ("Settled", s.settled.to_string()),
+        ("Pending sentences", s.pending_sentences.to_string()),
+        ("Pending parents", s.pending_parents.to_string()),
+        ("Unmarked parents", s.unmarked_parents.to_string()),
+        ("Stale children", s.stale_children.to_string()),
+        ("Orphan children", s.orphan_children.to_string()),
+        ("Duplicate children", s.duplicate_children.to_string()),
+        ("Legacy children", s.legacy_children.to_string()),
+        ("Children to re-tag", s.remeta_children.to_string()),
+        ("Full-text entries missing", s.bm25_missing.to_string()),
+        ("Graph edges owed", s.graph_owed.to_string()),
+        ("Graph edges queued", s.graph_queue_owed.to_string()),
+        ("Runs in flight", s.in_flight.to_string()),
+        ("Agent namespaces", s.namespaces.to_string()),
+        ("Heal", heal),
+        ("Reconciler", reconciler),
+    ]
+}
+
+fn list_warnings(s: &dakera_client::DerivationStatus) {
+    if !s.unreadable_namespaces.is_empty() {
+        output::warning(&format!(
+            "Not counted (index unreadable): {}",
+            s.unreadable_namespaces.join(", ")
+        ));
+    }
+    if !s.dirty_namespaces.is_empty() {
+        println!(
+            "  Marked for the reconciler: {}",
+            s.dirty_namespaces.join(", ")
+        );
+    }
+}
+
+/// `dk admin derivations-status` — `GET /admin/derivations/status`.
+pub async fn derivations_status(ctx: &Context) -> Result<()> {
+    let client = dakera_client::DakeraClient::new(&ctx.url)?;
+    let t = ctx.log_request("GET", "/admin/derivations/status");
+    let status = client.derivations_status().await;
+    ctx.log_response(t, if status.is_ok() { "200 OK" } else { "ERR" });
+    let status = status?;
+    if !is_table(ctx) {
+        output::print_item(&status, ctx.format);
+        return Ok(());
+    }
+    if status.settled {
+        output::success("Derived data is settled: nothing owed");
+    } else {
+        output::info("Derived data still owed (the reconciler derives it in the background; `dk admin derivations-drain` does it now)");
+    }
+    output::print_kv(&derivation_pairs(&status), ctx.format);
+    list_warnings(&status);
+    Ok(())
+}
+
+/// `dk admin derivations-drain` — `POST /admin/derivations/drain`.
+pub async fn derivations_drain(ctx: &Context, sub: &ArgMatches) -> Result<()> {
+    let timeout = sub.get_one::<u64>("timeout").copied();
+    // The request lasts as long as the drain: give the HTTP client the drain's
+    // timeout plus a margin (the server default is 600 s).
+    let client = dakera_client::DakeraClient::builder(&ctx.url)
+        .timeout_secs(timeout.unwrap_or(600).saturating_add(60))
+        .build()?;
+    let t = ctx.log_request("POST", "/admin/derivations/drain");
+    let drained = client.drain_derivations(timeout).await;
+    ctx.log_response(t, if drained.is_ok() { "200 OK" } else { "ERR" });
+    let drained = drained?;
+    if !is_table(ctx) {
+        output::print_item(&drained, ctx.format);
+        return Ok(());
+    }
+    if drained.settled {
+        output::success(&format!(
+            "Drained in {} ms ({} rounds): nothing owed",
+            drained.elapsed_ms, drained.rounds
+        ));
+    } else if drained.timed_out {
+        output::warning(&format!(
+            "The drain stopped on its timeout after {} ms; derived data is still owed",
+            drained.elapsed_ms
+        ));
+    } else {
+        output::warning("The drain finished but derived data is still owed");
+    }
+    output::print_kv(
+        &[
+            ("Parents run", drained.parents_run.to_string()),
+            ("Sentences left pending", drained.pending_left.to_string()),
+            ("Children deleted", drained.deleted.to_string()),
+            (
+                "Full-text entries restored",
+                drained.bm25_restored.to_string(),
+            ),
+            ("Graph rebuilds queued", drained.graph_queued.to_string()),
+        ],
+        ctx.format,
+    );
+    if !drained.settled {
+        println!();
+        output::print_kv(&derivation_pairs(&drained.status), ctx.format);
+        list_warnings(&drained.status);
+    }
+    Ok(())
+}
+
+/// `dk admin session-idle-timeout [DURATION]` — `GET /admin/config`, or
+/// `PUT /admin/config` with `session_idle_timeout_secs`.
+pub async fn session_idle_timeout(ctx: &Context, sub: &ArgMatches) -> Result<()> {
+    let client = dakera_client::DakeraClient::new(&ctx.url)?;
+    let Some(secs) = sub.get_one::<u64>("duration").copied() else {
+        let t = ctx.log_request("GET", "/admin/config");
+        let config = client.get_config().await;
+        ctx.log_response(t, if config.is_ok() { "200 OK" } else { "ERR" });
+        let config = config?;
+        let Some(current) = config.session_idle_timeout_secs else {
+            return Err(anyhow::anyhow!(
+                "this server does not report session_idle_timeout_secs (it predates v0.12.2, \
+                 where sessions are never ended for inactivity)"
+            ));
+        };
+        if is_table(ctx) {
+            output::print_kv(&[("Session idle timeout", human_secs(current))], ctx.format);
+        } else {
+            output::print_item(&json!({ "session_idle_timeout_secs": current }), ctx.format);
+        }
+        return Ok(());
+    };
+    if secs > dakera_client::memory::MAX_SESSION_IDLE_TIMEOUT_SECS {
+        return Err(input_error(format!(
+            "the session idle timeout is at most 30d ({} seconds), got {secs}",
+            dakera_client::memory::MAX_SESSION_IDLE_TIMEOUT_SECS
+        )));
+    }
+    let t = ctx.log_request("PUT", "/admin/config");
+    let updated = client.set_session_idle_timeout(secs).await;
+    ctx.log_response(t, if updated.is_ok() { "200 OK" } else { "ERR" });
+    let updated = updated?;
+    if !is_table(ctx) {
+        output::print_item(&updated, ctx.format);
+        return Ok(());
+    }
+    match updated.config.session_idle_timeout_secs {
+        Some(now) => output::success(&format!(
+            "Session idle timeout set to {} (applies at the reaper's next tick; persisted as a runtime override)",
+            human_secs(now)
+        )),
+        None => output::warning(
+            "The server accepted the request but does not report session_idle_timeout_secs: it predates v0.12.2 and ignores the setting",
+        ),
+    }
+    for w in &updated.warnings {
+        output::warning(w);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,5 +753,31 @@ mod tests {
     fn backup_paths_are_encoded() {
         assert_eq!(backup_path("abc-123"), "/admin/backups/abc-123");
         assert_eq!(restore_path("r 1"), "/admin/backups/restore/r%201");
+    }
+
+    #[test]
+    fn human_secs_picks_the_largest_unit() {
+        assert_eq!(super::human_secs(0), "0 (never)");
+        assert_eq!(super::human_secs(14_400), "4h");
+        assert_eq!(super::human_secs(86_400), "1d");
+        assert_eq!(super::human_secs(5_400), "90m");
+        assert_eq!(super::human_secs(61), "61s");
+    }
+
+    #[test]
+    fn admin_v0122_commands_parse() {
+        let m = crate::cli::build_admin_command()
+            .try_get_matches_from(["admin", "derivations-drain", "--timeout", "10m"])
+            .unwrap();
+        let sub = m.subcommand_matches("derivations-drain").unwrap();
+        assert_eq!(*sub.get_one::<u64>("timeout").unwrap(), 600);
+        let m = crate::cli::build_admin_command()
+            .try_get_matches_from(["admin", "session-idle-timeout", "4h"])
+            .unwrap();
+        let sub = m.subcommand_matches("session-idle-timeout").unwrap();
+        assert_eq!(*sub.get_one::<u64>("duration").unwrap(), 14_400);
+        assert!(crate::cli::build_admin_command()
+            .try_get_matches_from(["admin", "derivations-status"])
+            .is_ok());
     }
 }

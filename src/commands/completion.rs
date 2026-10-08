@@ -9,7 +9,7 @@ use crate::output;
 
 /// All top-level `dk` subcommands (used in every shell script).
 const TOP_LEVEL_CMDS: &str =
-    "init health capabilities attachment namespace index memory session agent knowledge admin keys config completion";
+    "init health capabilities whoami attachment namespace index memory session agent knowledge admin keys config completion";
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
@@ -102,10 +102,10 @@ _dk() {{
                 "store batch-store recall get update forget search extract importance consolidate feedback" -- "$cur"))
             ;;
         session)
-            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "start end get list memories" -- "$cur"))
+            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "start touch end get list memories" -- "$cur"))
             ;;
         agent)
-            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "list memories stats sessions" -- "$cur"))
+            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "list create memories stats sessions" -- "$cur"))
             ;;
         knowledge)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
@@ -117,7 +117,8 @@ _dk() {{
                  cache-stats cache-clear config-get config-set quotas-get quotas-set \
                  slow-queries backup-create backup-list backup-get backup-download backup-upload \
                  backup-restore backup-restore-status backup-schedule backup-delete \
-                 encryption-status encryption-rotate encryption-reseal embed-migration" \
+                 encryption-status encryption-rotate encryption-reseal embed-migration \
+                 derivations-status derivations-drain session-idle-timeout" \
                 -- "$cur"))
             ;;
         attachment)
@@ -126,7 +127,7 @@ _dk() {{
             ;;
         keys)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "create list get delete deactivate rotate usage" -- "$cur"))
+                "create list get edit patch delete deactivate rotate usage" -- "$cur"))
             ;;
         completion)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
@@ -195,6 +196,7 @@ _dk() {
                 'init:Interactive setup wizard'
                 'health:Check server health'
                 'capabilities:Show what the server supports'
+                'whoami:Show the API key in use'
                 'attachment:Attachments: upload, transcribe, index'
                 'namespace:Manage namespaces'
                 'index:Index management'
@@ -259,6 +261,7 @@ _dk() {
                 session)
                     local s_cmds=(
                         'start:Start a new session'
+                        'touch:Keep a session from ending for inactivity'
                         'end:End active session'
                         'get:Get session details'
                         'list:List sessions'
@@ -271,6 +274,7 @@ _dk() {
                 agent)
                     local a_cmds=(
                         'list:List all agents'
+                        'create:Create an agent'
                         'memories:Get memories for agent'
                         'stats:Get agent statistics'
                         'sessions:Get sessions for agent'
@@ -316,6 +320,9 @@ _dk() {
                         'encryption-rotate:Rotate the encryption key'
                         'encryption-reseal:Run a re-seal pass'
                         'embed-migration:Show the background re-embed'
+                        'derivations-status:Show the derived data owed'
+                        'derivations-drain:Derive everything owed now'
+                        'session-idle-timeout:Show or set the session idle timeout'
                     )
                     _arguments '1: :->subcmd' \
                         '(--namespace -n)'{--namespace,-n}'[Namespace]:namespace:_dk_namespaces'
@@ -326,6 +333,7 @@ _dk() {
                         'create:Create new API key'
                         'list:List all keys'
                         'get:Get key details'
+                        'edit:Rename a key or replace its namespaces'
                         'delete:Delete/revoke key'
                         'deactivate:Deactivate key'
                         'rotate:Rotate key'
@@ -414,6 +422,7 @@ complete -c dk -s v -l verbose   -d 'Enable verbose output'
 complete -c dk -f -n '__dk_no_subcommand' -a 'init'       -d 'Interactive setup wizard'
 complete -c dk -f -n '__dk_no_subcommand' -a 'health'     -d 'Check server health'
 complete -c dk -f -n '__dk_no_subcommand' -a 'capabilities' -d 'Show what the server supports'
+complete -c dk -f -n '__dk_no_subcommand' -a 'whoami' -d 'Show the API key in use'
 complete -c dk -f -n '__dk_no_subcommand' -a 'attachment' -d 'Attachments: upload, transcribe, index'
 complete -c dk -f -n '__dk_no_subcommand' -a 'namespace'  -d 'Manage namespaces'
 complete -c dk -f -n '__dk_no_subcommand' -a 'index'      -d 'Index management'
@@ -454,6 +463,7 @@ complete -c dk -n '__dk_using_subcommand memory' -l agent-id  -d 'Agent ID' -r -
 
 # session subcommands
 complete -c dk -f -n '__dk_using_subcommand session' -a 'start'    -d 'Start a new session'
+complete -c dk -f -n '__dk_using_subcommand session' -a 'touch'    -d 'Keep a session from ending for inactivity'
 complete -c dk -f -n '__dk_using_subcommand session' -a 'end'      -d 'End active session'
 complete -c dk -f -n '__dk_using_subcommand session' -a 'get'      -d 'Get session details'
 complete -c dk -f -n '__dk_using_subcommand session' -a 'list'     -d 'List sessions'
@@ -462,6 +472,7 @@ complete -c dk -n '__dk_using_subcommand session' -l agent-id -d 'Agent ID' -r -
 
 # agent subcommands
 complete -c dk -f -n '__dk_using_subcommand agent' -a 'list'     -d 'List all agents'
+complete -c dk -f -n '__dk_using_subcommand agent' -a 'create'   -d 'Create an agent'
 complete -c dk -f -n '__dk_using_subcommand agent' -a 'memories' -d 'Get memories for agent'
 complete -c dk -f -n '__dk_using_subcommand agent' -a 'stats'    -d 'Get agent statistics'
 complete -c dk -f -n '__dk_using_subcommand agent' -a 'sessions' -d 'Get sessions for agent'
@@ -498,6 +509,9 @@ complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-status' -d 'Sh
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-rotate' -d 'Rotate the encryption key'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'encryption-reseal' -d 'Run a re-seal pass'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'embed-migration' -d 'Show the background re-embed'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'derivations-status' -d 'Show the derived data owed'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'derivations-drain' -d 'Derive everything owed now'
+complete -c dk -f -n '__dk_using_subcommand admin' -a 'session-idle-timeout' -d 'Show or set the session idle timeout'
 complete -c dk -f -n '__dk_using_subcommand health' -a 'ready' -d 'Readiness probe'
 complete -c dk -f -n '__dk_using_subcommand health' -a 'live'  -d 'Liveness probe'
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'upload'     -d 'Upload a file'
@@ -514,6 +528,7 @@ complete -c dk -n '__dk_using_subcommand admin' -l namespace -s n -d 'Namespace'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'create'     -d 'Create new API key'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'list'       -d 'List all keys'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'get'        -d 'Get key details'
+complete -c dk -f -n '__dk_using_subcommand keys' -a 'edit'       -d 'Rename a key or replace its namespaces'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'delete'     -d 'Delete/revoke key'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'deactivate' -d 'Deactivate key'
 complete -c dk -f -n '__dk_using_subcommand keys' -a 'rotate'     -d 'Rotate key'

@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-08
+
+Support for Dakera server **v0.12.2** (Dakera-AI/dakera#916). Compatible with v0.11.108,
+v0.12.0, v0.12.1 and v0.12.2 servers; the commands below that need v0.12.2 say so on an
+older server (see the README compatibility table). Built on `dakera-client` 0.12.2.
+
+### Added
+
+- **`dk whoami`**: `GET /v1/auth/whoami` — the key the CLI authenticates with (scope,
+  grants, unrestricted, grant syntax version, inert grants).
+- **`dk agent create <agent_id>`**: `POST /v1/agents` — create an agent before its first
+  memory; idempotent (an existing agent is reported and left unchanged).
+- **`dk keys edit <key_id>`** (alias `patch`): `PATCH /admin/keys/{id}`, or with
+  `-n <namespace>` `PATCH /v1/namespaces/{ns}/keys/{id}` — `--name`, `--namespaces a,b`
+  (`p*` prefix patterns allowed), `--all-namespaces` (sends `null`), `--no-namespaces`
+  (sends `[]`). Nothing to change exits 5 without a request.
+- **`dk keys rotate --grace <duration>`**: the old key keeps working for up to 7 days; the
+  new key id and the old key's deadline are shown.
+- **`dk session touch <session_id>`**: `POST /v1/sessions/{id}/touch` — keep a quiet session
+  from being ended for inactivity (an ended session is reported, never re-opened).
+- **`dk session start --idle-timeout <duration>`**: the session's own inactivity timeout
+  (`0` = never, at most 30 days).
+- **`--preview <chars>`** on `dk agent memories`, `dk session memories` and
+  `dk knowledge full-graph` (`content_preview_chars`, 1-10000): the server cuts each content;
+  the listings add `CONTENT_LEN` and `TRUNCATED` columns. **`--include-derived`** on
+  `dk agent memories`. `--offset` on both memory listings, `--limit` on `dk session memories`.
+- **`dk admin derivations-status`** and **`dk admin derivations-drain [--timeout]`**:
+  `GET /admin/derivations/status`, `POST /admin/derivations/drain` (global admin key).
+- **`dk admin session-idle-timeout [<duration>]`**: show or set the server-wide session
+  inactivity timeout (`session_idle_timeout_secs` of `/admin/config`).
+- Durations accept `s`, `m`, `h`, `d` suffixes (`3600`, `90m`, `8h`, `7d`).
+- `dk session list` shows `ended_reason` (`client` / `idle`).
+- Shell completions list the new commands.
+
+### Changed
+
+- `dk session memories` reports the server's `total` (it printed 0) and reads the listing
+  through `dakera-client` 0.12.2.
+- `ClientError::InvalidRequest` from the SDK exits 5 (invalid input).
+
+### Fixed
+
+- `dk keys rotate` printed no new key: it looked for `key`, the server answers `new_key`.
+
+### Server behaviour changes you may hit (Dakera v0.12.2)
+
+- **Sessions are authorized by their agent**: keys no longer need a `_dakera_sessions` grant
+  (such an entry is inert, see `dk whoami`); a key without grants lists no sessions;
+  `dk session end` with a read-only key gets `403` (exit 4), and ending a session of an
+  agent the key cannot reach returns the empty idempotent answer.
+- **Sessions auto-end after 4 h idle by default** (`ended_reason: idle`). Use
+  `dk session touch`, `dk session start --idle-timeout`, or
+  `dk admin session-idle-timeout`. Storing into an ended session still succeeds.
+- **Stricter validation** (`400`, exit 5, the message names the field): key namespace
+  lists, agent ids (at most 241 bytes), memory metadata, reserved markers, TTLs, imports.
+- **The memory content limit is in bytes** (UTF-8, default 100000), also on `dk memory update`.
+- **Listings exclude derived records unless `include_derived=true`**: `dk agent memories`
+  no longer shows the sentence sub-memories; add `--include-derived`.
+
+### Dependency
+
+- `dakera-client` 0.12.2 (crates.io).
+
 ## [0.8.0] - 2026-10-01
 
 Support for Dakera server v0.12.0. Compatible with v0.11.108 and v0.12.0 servers;

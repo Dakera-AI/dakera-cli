@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_kv_json_serialization_roundtrip() {
-        let pairs = vec![("key", "value".to_string())];
+        let pairs = [("key", "value".to_string())];
         let map: std::collections::HashMap<&str, &str> =
             pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let json_str = serde_json::to_string_pretty(&map).unwrap();

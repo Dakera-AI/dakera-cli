@@ -77,6 +77,48 @@ async fn main() {
     }
 }
 
+async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> anyhow::Result<()> {
+    let config = match matches.get_one::<String>("profile") {
+        Some(p) => Config::load_with_profile(p),
+        None => Config::load(),
+    };
+
+    let cli_url = matches.get_one::<String>("url").unwrap();
+    let url = if cli_url != "http://localhost:3000" {
+        cli_url.clone()
+    } else {
+        config.server_url.clone()
+    };
+
+    let ctx = Context::new(url, format, verbose);
+
+    match matches.subcommand() {
+        Some(("init", _)) => init::execute().await?,
+        Some(("health", sub_matches)) => health::execute(&ctx, sub_matches).await?,
+        Some(("capabilities", _)) => capabilities::execute(&ctx).await?,
+        Some(("whoami", _)) => keys::whoami(&ctx).await?,
+        Some(("attachment", sub_matches)) => attachment::execute(&ctx, sub_matches).await?,
+        Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
+        Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
+        Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,
+        Some(("session", sub_matches)) => session::execute(&ctx, sub_matches).await?,
+        Some(("agent", sub_matches)) => agent::execute(&ctx, sub_matches).await?,
+        Some(("knowledge", sub_matches)) => knowledge::execute(&ctx, sub_matches).await?,
+        Some(("keys", sub_matches)) => keys::execute(&ctx, sub_matches).await?,
+        Some(("admin", sub_matches)) => admin::execute(&ctx, sub_matches).await?,
+        Some(("completion", sub_matches)) => {
+            let shell = sub_matches.get_one::<String>("shell").unwrap();
+            let install = sub_matches.get_flag("install");
+            completion::execute(shell, install)?;
+        }
+        Some(("config", sub_matches)) => config_cmd::execute(sub_matches).await?,
+        Some(("text", sub_matches)) => text::execute(&ctx, sub_matches).await?,
+        _ => build_cli().print_help()?,
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,45 +159,4 @@ mod tests {
             OutputFormat::Compact
         ));
     }
-}
-
-async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> anyhow::Result<()> {
-    let config = match matches.get_one::<String>("profile") {
-        Some(p) => Config::load_with_profile(p),
-        None => Config::load(),
-    };
-
-    let cli_url = matches.get_one::<String>("url").unwrap();
-    let url = if cli_url != "http://localhost:3000" {
-        cli_url.clone()
-    } else {
-        config.server_url.clone()
-    };
-
-    let ctx = Context::new(url, format, verbose);
-
-    match matches.subcommand() {
-        Some(("init", _)) => init::execute().await?,
-        Some(("health", sub_matches)) => health::execute(&ctx, sub_matches).await?,
-        Some(("capabilities", _)) => capabilities::execute(&ctx).await?,
-        Some(("attachment", sub_matches)) => attachment::execute(&ctx, sub_matches).await?,
-        Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
-        Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
-        Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,
-        Some(("session", sub_matches)) => session::execute(&ctx, sub_matches).await?,
-        Some(("agent", sub_matches)) => agent::execute(&ctx, sub_matches).await?,
-        Some(("knowledge", sub_matches)) => knowledge::execute(&ctx, sub_matches).await?,
-        Some(("keys", sub_matches)) => keys::execute(&ctx, sub_matches).await?,
-        Some(("admin", sub_matches)) => admin::execute(&ctx, sub_matches).await?,
-        Some(("completion", sub_matches)) => {
-            let shell = sub_matches.get_one::<String>("shell").unwrap();
-            let install = sub_matches.get_flag("install");
-            completion::execute(shell, install)?;
-        }
-        Some(("config", sub_matches)) => config_cmd::execute(sub_matches).await?,
-        Some(("text", sub_matches)) => text::execute(&ctx, sub_matches).await?,
-        _ => build_cli().print_help()?,
-    }
-
-    Ok(())
 }
