@@ -195,6 +195,20 @@ dk --format json capabilities
 
 ---
 
+### `dk whoami`
+
+The API key this CLI authenticates with, as the server reads it
+(`GET /v1/auth/whoami`, Dakera v0.12.2): scope, namespace grants, whether it is
+unrestricted, its grant syntax version and the grants that match nothing
+(`inert`: a pre-v0.12.2 `foo*`, or `_dakera_sessions`).
+
+```bash
+dk whoami
+dk --format json whoami
+```
+
+---
+
 ### `dk attachment`
 
 Files that agent memories can point at (Dakera v0.12, **opt-in**: the server
@@ -306,11 +320,19 @@ Manage agent sessions.
 
 ```bash
 dk session start my-agent
+dk session start my-agent --idle-timeout 8h   # v0.12.2: own inactivity timeout (0 = never)
+dk session touch sess-abc123                  # v0.12.2: keep a quiet session open
 dk session end sess-abc123
 dk session list --agent-id my-agent --active-only
 dk session get sess-abc123
-dk session memories sess-abc123
+dk session memories sess-abc123 --preview 200 --limit 20
 ```
+
+Since Dakera v0.12.2 the server ends a session after **4 hours** without
+activity (storing, recalling or `dk session touch`); `dk session list` shows
+`ended_reason` (`client` or `idle`). Sessions are authorized by their agent: a
+key needs Write on the agent to start, touch or end its sessions, and
+`dk session end` with a read-only key is refused (`403`).
 
 ---
 
@@ -320,10 +342,18 @@ View and manage agents.
 
 ```bash
 dk agent list
+dk agent create mlx-dev                        # v0.12.2: create before the first memory (idempotent)
 dk agent stats my-agent
 dk agent memories my-agent --type episodic --limit 20
+dk agent memories my-agent --preview 200       # v0.12.2: content previews (CONTENT_LEN, TRUNCATED columns)
+dk agent memories my-agent --include-derived   # v0.12.2: also list the derived sentence sub-memories
 dk agent sessions my-agent --active-only
 ```
+
+Since Dakera v0.12.2 `dk agent memories` leaves the derived sentence
+sub-memories out unless `--include-derived` is given. With `--preview N` each
+memory's content is cut to N characters by the server; `dk memory get` shows a
+whole memory.
 
 ---
 
@@ -336,7 +366,7 @@ Knowledge graph management and memory summarization.
 dk knowledge graph my-agent --memory-id mem-abc123 --depth 3
 
 # Full knowledge graph for an agent
-dk knowledge full-graph my-agent --max-nodes 100
+dk knowledge full-graph my-agent --max-nodes 100 --preview 200
 
 # Summarize a set of memories into a new memory
 dk knowledge summarize my-agent --memory-ids m1,m2,m3 --dry-run
@@ -369,7 +399,19 @@ dk keys list
 dk keys create my-key --permissions read,write
 dk keys delete key-abc123
 dk keys usage key-abc123
+
+# Dakera v0.12.2
+dk keys edit dk_key_1a2b --name ci                             # rename (alias: dk keys patch)
+dk keys edit dk_key_1a2b --namespaces '_dakera_agent_mlx-*,docs'  # replace the grants (p* prefix patterns)
+dk keys edit dk_key_1a2b --all-namespaces                      # every namespace (sends null)
+dk keys edit dk_key_1a2b --no-namespaces                       # no namespace (sends [])
+dk keys edit dk_key_1a2b -n team-a --namespaces 'team-a*'      # as a namespace admin
+dk keys rotate dk_key_1a2b --grace 1h                          # the old key keeps working for 1h (at most 7d)
 ```
+
+`dk keys edit` needs an unrestricted `super_admin` key (or, with `-n`, an admin
+of that namespace whose grants contain the new ones). Saving the namespaces of a
+key created before v0.12.2 activates its `foo*` entries.
 
 ---
 
@@ -423,6 +465,12 @@ dk admin backup-upload nightly.json.gz                   # super_admin
 dk admin backup-restore <backup-id> -n my-ns --wait      # super_admin; add --overwrite --yes for a point-in-time restore
 dk admin backup-restore-status <restore-id>
 dk admin backup-delete <backup-id>
+
+# Dakera v0.12.2
+dk admin derivations-status                              # derived data owed (sub-memories, full-text, graph edges)
+dk admin derivations-drain --timeout 10m                 # derive everything owed now
+dk admin session-idle-timeout                            # show the server-wide session idle timeout
+dk admin session-idle-timeout 8h                         # set it (0 = never; at most 30d)
 ```
 
 All of these need a **global** key. A key pinned to namespaces gets `403` on
@@ -461,9 +509,9 @@ dk completion powershell
 
 ## Dakera v0.12 and compatibility
 
-`dk` 0.8 works against Dakera **v0.11.108 and v0.12.0** servers (it uses
-`dakera-client` 0.12). The new commands need the server release that has the
-route or field:
+`dk` 0.8 works against Dakera **v0.11.108, v0.12.0, v0.12.1 and v0.12.2** servers
+(it uses `dakera-client` 0.12). The new commands need the server release that has
+the route or field:
 
 | Command | v0.11.108 | v0.12.0 |
 |---|---|---|
@@ -475,6 +523,17 @@ route or field:
 | `dk attachment ...` | no | yes, once `DAKERA_ATTACHMENTS` is on |
 | `dk admin embed-migration`, `encryption-status`, `encryption-reseal` | no | yes |
 | other `dk admin` commands (`encryption-rotate`, `backup-*`, `quotas-*`, ...) | routes that v0.11.108 already had | same routes; v0.12 changes who may call them and what they do (below) |
+
+The 0.8.1 commands need a **v0.12.2** server; on v0.12.0 / v0.12.1 they fail
+(`404`/`405`, exit 3 or 1) or are ignored, as noted:
+
+| Command (0.8.1) | v0.12.0 / v0.12.1 | v0.12.2 |
+|---|---|---|
+| `dk whoami`, `dk agent create`, `dk session touch`, `dk keys edit`, `dk admin derivations-*` | no route | yes |
+| `dk keys rotate --grace` | the old key is deactivated at once (`dk` warns) | yes |
+| `dk session start --idle-timeout` | ignored (sessions never time out) | yes |
+| `dk admin session-idle-timeout` | says the server predates it | yes |
+| `--preview`, `--include-derived` (`agent memories`, `session memories`, `knowledge full-graph`) | ignored (full content; derived records always listed) | yes |
 
 ### Permissions (v0.12)
 

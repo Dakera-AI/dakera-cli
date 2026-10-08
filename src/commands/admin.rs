@@ -202,6 +202,9 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
         Some(("encryption-rotate", sub)) => admin_v012::encryption_rotate(ctx, sub).await?,
         Some(("encryption-reseal", sub)) => admin_v012::encryption_reseal(ctx, sub).await?,
         Some(("embed-migration", _)) => admin_v012::embed_migration(ctx).await?,
+        Some(("derivations-status", _)) => admin_v012::derivations_status(ctx).await?,
+        Some(("derivations-drain", sub)) => admin_v012::derivations_drain(ctx, sub).await?,
+        Some(("session-idle-timeout", sub)) => admin_v012::session_idle_timeout(ctx, sub).await?,
 
         Some(("backup-list", _sub)) => {
             let path = "/admin/backups";

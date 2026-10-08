@@ -178,6 +178,9 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             if let Some(v) = sub_matches.get_one::<u32>("max-edges") {
                 body["max_edges_per_node"] = json!(v);
             }
+            if let Some(v) = sub_matches.get_one::<u32>("preview") {
+                body["content_preview_chars"] = json!(v);
+            }
             let path = "/v1/knowledge/graph/full";
             let result = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
             if matches!(ctx.format, OutputFormat::Json) {

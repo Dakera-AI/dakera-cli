@@ -135,6 +135,7 @@ pub fn classify(err: &anyhow::Error) -> CliError {
                 return CliError::Server(msg)
             }
             E::NamespaceNotFound(_) | E::VectorNotFound(_) => return CliError::NotFound(msg),
+            E::InvalidRequest(_) => return CliError::Input(msg),
             E::Connection(_) | E::Timeout => return CliError::Connection(msg),
             E::Http(e) if e.is_connect() || e.is_timeout() => return CliError::Connection(msg),
             _ => {}

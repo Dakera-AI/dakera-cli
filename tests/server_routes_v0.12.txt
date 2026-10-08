@@ -1,4 +1,4 @@
-# Routes of the Dakera v0.12.0 server (crates/api/src/lib.rs + keys_router + attachment routes), params as *.
+# Routes of the Dakera v0.12.0 server (plus the v0.12.2 routes) (crates/api/src/lib.rs + keys_router + attachment routes), params as *.
 # Admin routes are served under /admin and /v1/admin. Regenerate when the server's router changes.
 DELETE /admin/backups/*
 DELETE /admin/keys/*
@@ -285,3 +285,13 @@ PUT /v1/memory/update/*
 PUT /v1/namespaces/*
 PUT /v1/namespaces/*/config
 PUT /v1/namespaces/*/memory_policy
+# Added in v0.12.2
+GET /admin/derivations/status
+GET /v1/admin/derivations/status
+GET /v1/auth/whoami
+PATCH /admin/keys/*
+PATCH /v1/namespaces/*/keys/*
+POST /admin/derivations/drain
+POST /v1/admin/derivations/drain
+POST /v1/agents
+POST /v1/sessions/*/touch

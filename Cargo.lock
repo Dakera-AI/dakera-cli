@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "dakera-cli"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -368,9 +368,8 @@ dependencies = [
 
 [[package]]
 name = "dakera-client"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ae9381b5359879fc76969e80b9db79a0fedf8affb160e09e5b76ed0b0e01763"
+version = "0.12.2"
+source = "git+https://github.com/Dakera-AI/dakera-rs?branch=claude%2Fdakera-deploy-issues-audit-gfm5yq#7da7a4fe935da6b02a4964266172082df2d1ab70"
 dependencies = [
  "futures-util",
  "reqwest",
