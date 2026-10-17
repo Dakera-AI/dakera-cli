@@ -2,7 +2,7 @@
 
 use nu_ansi_term::Color;
 
-use crate::config::{Config, Profile};
+use crate::config::{self as cfg, Config, Profile};
 
 pub async fn execute(sub_matches: &clap::ArgMatches) -> anyhow::Result<()> {
     match sub_matches.subcommand() {
@@ -24,9 +24,28 @@ async fn cmd_show(_matches: &clap::ArgMatches) -> anyhow::Result<()> {
     let file_cfg = Config::read_config_file()?;
 
     println!("Configuration:");
-    println!("  Server URL:        {}", config.server_url);
+    println!(
+        "  Server URL:        {}",
+        cfg::redact_url(&config.server_url)
+    );
     println!("  Default namespace: {}", config.default_namespace);
     println!("  Active profile:    {}", file_cfg.active_profile);
+    // The key itself is never printed: only enough of it to tell keys apart.
+    let key = std::env::var("DAKERA_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
+    match &key {
+        Some(k) => println!("  API key:           {} (DAKERA_API_KEY)", cfg::mask_key(k)),
+        None => println!("  API key:           not set (DAKERA_API_KEY)"),
+    }
+    let transport = if config.server_url.starts_with("https://") {
+        "TLS (https), server certificate verified"
+    } else if cfg::is_cleartext_remote(&config.server_url) {
+        "plain http to a remote host: requests and the API key are not encrypted"
+    } else {
+        "plain http (local)"
+    };
+    println!("  Transport:         {transport}");
     if let Some(path) = Config::config_path() {
         println!(
             "  Config file:       {}{}",
@@ -38,6 +57,7 @@ async fn cmd_show(_matches: &clap::ArgMatches) -> anyhow::Result<()> {
     println!("Environment overrides:");
     println!("  DAKERA_URL       - Server URL");
     println!("  DAKERA_NAMESPACE - Default namespace");
+    println!("  DAKERA_API_KEY   - API key (read from the environment only, never stored)");
     println!();
     println!("Tip: run `dk config profile list` to see all profiles.");
     Ok(())

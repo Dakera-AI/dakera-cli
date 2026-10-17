@@ -64,6 +64,254 @@ fn found_message(returned: usize, total: usize) -> String {
     }
 }
 
+/// One ranked result of `dk memory recall`.
+#[derive(Debug, Serialize)]
+pub struct RecallRow {
+    /// Memory id.
+    pub id: String,
+    /// Memory content (stored data, shown as is).
+    pub content: String,
+    /// `episodic`, `semantic`, `procedural` or `working`.
+    pub memory_type: String,
+    /// Importance, 0.0 to 1.0.
+    pub importance: f32,
+    /// The ranking score (`smart_score`, else `weighted_score`, else `score`).
+    pub score: f32,
+    /// The derived sentence that matched best, when the server collapsed
+    /// sentence sub-memories into this source memory and the sentence
+    /// outranked the source's own text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_text: Option<String>,
+    /// The ids of the collapsed sentence sub-memories, best first.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_ids: Option<Vec<String>>,
+}
+
+/// One neighbourhood-context entry of `dk memory recall`.
+#[derive(Debug, Serialize)]
+pub struct ContextRow {
+    /// Memory id.
+    pub id: String,
+    /// Memory content (stored data, shown as is).
+    pub content: String,
+    /// The id of the ranked result this memory is context for (absent when
+    /// the server does not say: inline context, or a server before v0.12.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_of: Option<String>,
+    /// The 1-based place of that result in `memories`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_of_rank: Option<usize>,
+    /// The raw similarity of the neighbourhood search: not comparable with
+    /// the ranked results' scores.
+    pub score: f32,
+}
+
+/// What `dk memory recall` shows: at most `--top-k` ranked results, and the
+/// neighbourhood context apart from them.
+#[derive(Debug, Serialize)]
+pub struct RecallView {
+    /// The ranked results, at most `--top-k`.
+    pub memories: Vec<RecallRow>,
+    /// The neighbourhood context of those results.
+    pub context_memories: Vec<ContextRow>,
+    /// Context items an older server appended to `memories` that were left
+    /// out (under `--neighborhood separate` / `off`). Not printed in JSON.
+    #[serde(skip)]
+    pub omitted: usize,
+}
+
+/// The body of `POST /v1/memory/recall`: the SDK request's fields plus
+/// `neighborhood_mode` (and `neighborhood: false` for `off`, which servers
+/// before `neighborhood_mode` honour) and `include_summaries` when given.
+pub fn recall_body(
+    request: &RecallRequest,
+    mode: &str,
+    include_summaries: Option<bool>,
+) -> Result<serde_json::Value> {
+    let mut body = serde_json::to_value(request)?;
+    body["neighborhood_mode"] = serde_json::json!(mode);
+    if mode == "off" {
+        body["neighborhood"] = serde_json::json!(false);
+    }
+    if let Some(include) = include_summaries {
+        body["include_summaries"] = serde_json::json!(include);
+    }
+    Ok(body)
+}
+
+/// One recall result as a row, read with the SDK's result parser (which
+/// takes the server's `{memory, score, ...}` items and flat ones).
+fn recalled(item: &serde_json::Value) -> Result<dakera_client::memory::RecalledMemory> {
+    serde_json::from_value(item.clone())
+        .map_err(|e| anyhow::anyhow!("Failed to parse a recall result: {e}"))
+}
+
+fn recall_row(item: &serde_json::Value) -> Result<RecallRow> {
+    let m = recalled(item)?;
+    let matched_ids = item.get("matched_ids").and_then(|v| {
+        v.as_array().map(|ids| {
+            ids.iter()
+                .filter_map(|id| id.as_str().map(str::to_string))
+                .collect()
+        })
+    });
+    Ok(RecallRow {
+        id: m.id,
+        content: m.content,
+        memory_type: memory_type_to_string(&m.memory_type),
+        importance: m.importance,
+        score: m.score,
+        matched_text: api::str_of(item, "matched_text").map(str::to_string),
+        matched_ids,
+    })
+}
+
+/// Split a recall answer into ranked results (at most `top_k`) and context.
+/// Inline neighbourhood items (`retrieval: "neighborhood"`) and the
+/// `context_memories` of `separate` mode become context. A server before
+/// `neighborhood_mode` appends its context to `memories` unmarked: past
+/// `top_k` it is context under `inline` and left out otherwise.
+pub fn shape_recall(answer: &serde_json::Value, top_k: usize, mode: &str) -> Result<RecallView> {
+    let empty = Vec::new();
+    let items = answer
+        .get("memories")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty);
+    let (context_items, mut ranked_items): (Vec<&serde_json::Value>, Vec<&serde_json::Value>) =
+        items
+            .iter()
+            .partition(|item| api::str_of(item, "retrieval") == Some("neighborhood"));
+    let mut context_items = context_items;
+    let overflow = if ranked_items.len() > top_k {
+        ranked_items.split_off(top_k)
+    } else {
+        Vec::new()
+    };
+    let mut omitted = 0;
+    if mode == "inline" {
+        context_items.extend(overflow);
+    } else {
+        omitted = overflow.len();
+    }
+    if let Some(separate) = answer.get("context_memories").and_then(|v| v.as_array()) {
+        context_items.extend(separate.iter());
+    }
+    let memories = ranked_items
+        .into_iter()
+        .map(recall_row)
+        .collect::<Result<Vec<_>>>()?;
+    let mut context_memories = Vec::with_capacity(context_items.len());
+    for item in context_items {
+        let m = recalled(item)?;
+        let context_of = api::str_of(item, "context_of").map(str::to_string);
+        let context_of_rank = context_of
+            .as_deref()
+            .and_then(|id| memories.iter().position(|r| r.id == id))
+            .map(|i| i + 1);
+        context_memories.push(ContextRow {
+            id: m.id,
+            content: m.content,
+            context_of,
+            context_of_rank,
+            score: m.score,
+        });
+    }
+    Ok(RecallView {
+        memories,
+        context_memories,
+        omitted,
+    })
+}
+
+/// A ranked-results table row without the `matched_*` columns, for answers
+/// that have none.
+#[derive(Serialize)]
+struct PlainRecallRow<'a> {
+    id: &'a str,
+    content: &'a str,
+    memory_type: &'a str,
+    importance: f32,
+    score: f32,
+}
+
+/// A context table row: `context_of` reads `#<rank> <id>`.
+#[derive(Serialize)]
+struct ContextTableRow<'a> {
+    id: &'a str,
+    content: &'a str,
+    context_of: String,
+    score: f32,
+}
+
+/// Print a recall: the ranked table (with a `matched_text` column when a
+/// result has one), then a separate Context section. JSON / compact print
+/// `{"memories": [...], "context_memories": [...]}` and nothing else on
+/// stdout; the notes go to stderr there.
+pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
+    let table = matches!(format, crate::OutputFormat::Table);
+    if view.omitted > 0 {
+        let note = format!(
+            "{} neighbourhood context item(s) left out: this server predates neighborhood_mode \
+             and returns them inline; only the --top-k ranked results are shown",
+            view.omitted
+        );
+        if table {
+            output::warning(&note);
+        } else {
+            eprintln!("warning: {note}");
+        }
+    }
+    if !table {
+        output::print_item(view, format);
+        return;
+    }
+    if view.memories.is_empty() {
+        output::info("No memories found");
+    } else {
+        output::info(&found_message(view.memories.len(), 0));
+        if view.memories.iter().any(|r| r.matched_text.is_some()) {
+            output::print_data(&view.memories, format);
+        } else {
+            let rows: Vec<PlainRecallRow> = view
+                .memories
+                .iter()
+                .map(|r| PlainRecallRow {
+                    id: &r.id,
+                    content: &r.content,
+                    memory_type: &r.memory_type,
+                    importance: r.importance,
+                    score: r.score,
+                })
+                .collect();
+            output::print_data(&rows, format);
+        }
+    }
+    if view.context_memories.is_empty() {
+        return;
+    }
+    println!();
+    output::info(&format!(
+        "Context: {} session neighbour(s) of the results above (not ranked, not counted in \
+         --top-k; scores come from another search)",
+        view.context_memories.len()
+    ));
+    let rows: Vec<ContextTableRow> = view
+        .context_memories
+        .iter()
+        .map(|c| ContextTableRow {
+            id: &c.id,
+            content: &c.content,
+            context_of: match (c.context_of_rank, c.context_of.as_deref()) {
+                (Some(rank), Some(id)) => format!("#{rank} {id}"),
+                (None, Some(id)) => id.to_string(),
+                _ => "-".to_string(),
+            },
+            score: c.score,
+        })
+        .collect();
+    output::print_data(&rows, format);
+}
+
 fn memory_type_to_string(mt: &MemoryType) -> String {
     match mt {
         MemoryType::Episodic => "episodic".to_string(),
@@ -232,35 +480,21 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 request = request.with_type(parse_memory_type(t));
             }
             request.lang = sub_matches.get_one::<String>("lang").cloned();
+            let mode = sub_matches
+                .get_one::<String>("neighborhood")
+                .map(String::as_str)
+                .unwrap_or("separate");
+            let include_summaries = sub_matches.get_one::<bool>("include-summaries").copied();
+            let body = recall_body(&request, mode, include_summaries)?;
 
-            let t = ctx.log_request("POST", "/v1/memory/recall");
-            let response = client.recall(request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            let response = response?;
-
-            if response.memories.is_empty() {
-                output::info("No memories found");
-            } else {
-                output::info(&found_message(
-                    response.memories.len(),
-                    response.total_found,
-                ));
-                let rows: Vec<MemoryRow> = response
-                    .memories
-                    .into_iter()
-                    .map(|m| MemoryRow {
-                        id: m.id,
-                        content: m.content,
-                        memory_type: memory_type_to_string(&m.memory_type),
-                        importance: m.importance,
-                        score: m.score,
-                    })
-                    .collect();
-                output::print_data(&rows, ctx.format);
-            }
+            // Raw request: the `neighborhood_mode` / `include_summaries` fields
+            // and the `context_memories` / `matched_text` answer fields are newer
+            // than the SDK's recall types.
+            let answer =
+                api::request_json_logged(ctx, Method::POST, "/v1/memory/recall", Some(&body))
+                    .await?;
+            let shaped = shape_recall(&answer, top_k, mode)?;
+            print_recall(&shaped, ctx.format);
         }
 
         Some(("get", sub_matches)) => {

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +143,7 @@ impl Config {
             file_cfg.active_profile = name.to_string();
         }
 
-        fs::write(&path, toml::to_string_pretty(&file_cfg)?)?;
+        write_private(&path, &toml::to_string_pretty(&file_cfg)?)?;
         Ok(())
     }
 
@@ -171,14 +171,174 @@ impl Config {
         }
 
         file_cfg.active_profile = name.to_string();
-        fs::write(&path, toml::to_string_pretty(&file_cfg)?)?;
+        write_private(&path, &toml::to_string_pretty(&file_cfg)?)?;
         Ok(())
     }
+}
+
+/// Write the config file readable by its owner only (`0600`, in a `0700`
+/// directory when this creates it): server URLs may carry credentials, and
+/// the file is where a token would go. An existing file is narrowed to `0600`
+/// as well. On non-Unix systems the file is written with default permissions.
+pub fn write_private(path: &Path, contents: &str) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::DirBuilder::new()
+                    .recursive(true)
+                    .mode(0o700)
+                    .create(parent)?;
+            }
+        }
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?;
+        // `mode` applies only when the file is created.
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        file.write_all(contents.as_bytes())?;
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, contents)?;
+        Ok(())
+    }
+}
+
+/// A warning when the config file at `path` can be read by other users
+/// (the "other" read bit, or the group's), with the command that fixes it.
+/// `None` when it cannot (or does not exist, or on non-Unix systems).
+pub fn permission_warning(path: &Path) -> Option<String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(path).ok()?.permissions().mode() & 0o777;
+        if mode & 0o044 == 0 {
+            return None;
+        }
+        Some(format!(
+            "{} is readable by other users (mode {mode:o}); run `chmod 600 {}`",
+            path.display(),
+            path.display()
+        ))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
+    }
+}
+
+/// Whether `url` sends requests in clear text to another machine: `http://`
+/// to a host that is not the loopback interface. An API key sent there can be
+/// read on the network.
+pub fn is_cleartext_remote(url: &str) -> bool {
+    let Some(rest) = url.trim().strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit('@').next().unwrap_or("");
+    let host = match host_port.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => host_port.split(':').next().unwrap_or(""),
+    };
+    let host = host.to_ascii_lowercase();
+    let loopback = host == "localhost"
+        || host.ends_with(".localhost")
+        || host == "::1"
+        || host.starts_with("127.");
+    !loopback
+}
+
+/// `url` with the password of any `user:password@` part replaced by `***`.
+pub fn redact_url(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (authority, tail) = rest.split_at(end);
+    match authority.rsplit_once('@') {
+        Some((userinfo, host)) => {
+            let user = userinfo.split(':').next().unwrap_or("");
+            let masked = if userinfo.contains(':') {
+                format!("{user}:***")
+            } else {
+                "***".to_string()
+            };
+            format!("{scheme}://{masked}@{host}{tail}")
+        }
+        None => url.to_string(),
+    }
+}
+
+/// An API key as `config show` prints it: its first 3 and last 4 characters,
+/// or only `****` when it is too short to show any of it safely.
+pub fn mask_key(key: &str) -> String {
+    let chars: Vec<char> = key.chars().collect();
+    if chars.len() < 24 {
+        return format!("**** ({} characters)", chars.len());
+    }
+    let head: String = chars[..3].iter().collect();
+    let tail: String = chars[chars.len() - 4..].iter().collect();
+    format!("{head}…{tail} ({} characters)", chars.len())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn config_file_is_written_owner_only_and_narrowed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("dk-config-perm-{}", std::process::id()));
+        let path = dir.join("sub").join("config.toml");
+        write_private(&path, "active_profile = \"default\"\n").unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+        assert!(permission_warning(&path).is_none());
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let warning = permission_warning(&path).unwrap();
+        assert!(warning.contains("chmod 600"), "{warning}");
+        write_private(&path, "x = 1\n").unwrap();
+        assert_eq!(mode(&path), 0o600);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn keys_and_url_passwords_are_masked() {
+        let key = "dk_live_abcdefghijklmnop1234";
+        let masked = mask_key(key);
+        assert!(masked.starts_with("dk_…1234"), "{masked}");
+        assert!(!masked.contains("abcdefgh"));
+        assert_eq!(mask_key("short"), "**** (5 characters)");
+        assert_eq!(
+            redact_url("https://me:s3cret@db.example.com:3000/x"),
+            "https://me:***@db.example.com:3000/x"
+        );
+        assert_eq!(redact_url("http://localhost:3000"), "http://localhost:3000");
+    }
+
+    #[test]
+    fn cleartext_remote_urls_are_told_apart() {
+        assert!(is_cleartext_remote("http://dakera.example.com:3000"));
+        assert!(is_cleartext_remote("http://10.1.2.3"));
+        assert!(!is_cleartext_remote("https://dakera.example.com"));
+        assert!(!is_cleartext_remote("http://localhost:3000"));
+        assert!(!is_cleartext_remote("http://127.0.0.1:3000/"));
+        assert!(!is_cleartext_remote("http://[::1]:3000"));
+    }
 
     #[test]
     fn test_default_config() {

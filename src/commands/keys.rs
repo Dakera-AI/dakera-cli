@@ -1,7 +1,8 @@
 //! API key management commands
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::ArgMatches;
+use dakera_client::reqwest::Method;
 use dakera_client::{DakeraClient, KeyInfo, UpdateKeyRequest, WhoamiResponse};
 use serde_json::Value;
 
@@ -118,63 +119,25 @@ pub async fn whoami(ctx: &Ctx) -> Result<()> {
     Ok(())
 }
 
+// Through `api::request_json`: a refusal becomes an `ApiHttpError`, with its
+// exit code and hint (403 scope, 422 unknown field, ...), not raw JSON text.
 async fn keys_get(url: &str, path: &str) -> Result<Value> {
-    let client = super::authed_client();
-    let resp = client
-        .get(format!("{}{}", url, path))
-        .send()
-        .await
-        .with_context(|| format!("Failed to GET {}", path))?;
-
-    let status = resp.status();
-    let body = resp.text().await?;
-    if !status.is_success() {
-        anyhow::bail!("Request failed ({}): {}", status, body);
-    }
-    serde_json::from_str(&body).with_context(|| "Failed to parse response JSON")
+    crate::api::request_json(url, Method::GET, path, None).await
 }
 
 async fn keys_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value> {
-    let client = super::authed_client();
-    let mut req = client.post(format!("{}{}", url, path));
-    if let Some(b) = body {
-        req = req.json(b);
-    }
-    let resp = req
-        .send()
-        .await
-        .with_context(|| format!("Failed to POST {}", path))?;
-
-    let status = resp.status();
-    let text = resp.text().await?;
-    if !status.is_success() {
-        anyhow::bail!("Request failed ({}): {}", status, text);
-    }
-    if text.is_empty() {
-        Ok(Value::Object(serde_json::Map::new()))
-    } else {
-        serde_json::from_str(&text).with_context(|| "Failed to parse response JSON")
-    }
+    crate::api::request_json(url, Method::POST, path, body).await
 }
 
 async fn keys_delete(url: &str, path: &str) -> Result<Value> {
-    let client = super::authed_client();
-    let resp = client
-        .delete(format!("{}{}", url, path))
-        .send()
-        .await
-        .with_context(|| format!("Failed to DELETE {}", path))?;
+    crate::api::request_json(url, Method::DELETE, path, None).await
+}
 
-    let status = resp.status();
-    let text = resp.text().await?;
-    if !status.is_success() {
-        anyhow::bail!("Request failed ({}): {}", status, text);
-    }
-    if text.is_empty() {
-        Ok(Value::Object(serde_json::Map::new()))
-    } else {
-        serde_json::from_str(&text).with_context(|| "Failed to parse response JSON")
-    }
+/// `/admin/keys/{key_id}{suffix}` with the id percent-encoded.
+fn key_path(key_id: &str, suffix: &str) -> String {
+    let mut path = format!("/admin/keys/{}", crate::api::segment(key_id));
+    path.push_str(suffix);
+    path
 }
 
 pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
@@ -201,6 +164,10 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
             let result = result?;
 
+            if !matches!(ctx.format, OutputFormat::Table) {
+                output::print_item(&result, ctx.format);
+                return Ok(());
+            }
             if let Some(key) = result.get("key").and_then(|k| k.as_str()) {
                 output::success(&format!("API key created: {}", name));
                 output::warning("Save this key now - it will not be shown again!");
@@ -227,7 +194,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("get", sub)) => {
             let key_id = sub.get_one::<String>("key_id").unwrap();
-            let path = format!("/admin/keys/{}", key_id);
+            let path = key_path(key_id, "");
             let t = ctx.log_request("GET", &path);
             let result = keys_get(&ctx.url, &path).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
@@ -236,7 +203,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("delete", sub)) => {
             let key_id = sub.get_one::<String>("key_id").unwrap();
-            let path = format!("/admin/keys/{}", key_id);
+            let path = key_path(key_id, "");
             let t = ctx.log_request("DELETE", &path);
             let result = keys_delete(&ctx.url, &path).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
@@ -246,7 +213,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("deactivate", sub)) => {
             let key_id = sub.get_one::<String>("key_id").unwrap();
-            let path = format!("/admin/keys/{}/deactivate", key_id);
+            let path = key_path(key_id, "/deactivate");
             let t = ctx.log_request("POST", &path);
             let result = keys_post(&ctx.url, &path, None).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
@@ -266,7 +233,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
                 }
             }
             let client = DakeraClient::new(&ctx.url)?;
-            let path = format!("/admin/keys/{}/rotate", key_id);
+            let path = key_path(key_id, "/rotate");
             let t = ctx.log_request("POST", &path);
             let result = match grace {
                 Some(g) => client.rotate_key_with_grace(key_id, g).await,
@@ -321,7 +288,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("usage", sub)) => {
             let key_id = sub.get_one::<String>("key_id").unwrap();
-            let path = format!("/admin/keys/{}/usage", key_id);
+            let path = key_path(key_id, "/usage");
             let t = ctx.log_request("GET", &path);
             let result = keys_get(&ctx.url, &path).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });

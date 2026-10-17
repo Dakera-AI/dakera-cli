@@ -551,7 +551,7 @@ pub fn build_memory_command() -> Command {
                         .long("top-k")
                         .default_value("5")
                         .value_parser(value_parser!(usize))
-                        .help("Number of results to return"),
+                        .help("Most ranked results to return"),
                 )
                 .arg(
                     Arg::new("type")
@@ -560,7 +560,31 @@ pub fn build_memory_command() -> Command {
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("Filter by memory type"),
                 )
-                .arg(memory_lang_arg("Language of the query")),
+                .arg(memory_lang_arg("Language of the query"))
+                .arg(
+                    Arg::new("neighborhood")
+                        .long("neighborhood")
+                        .value_name("MODE")
+                        .default_value("separate")
+                        .value_parser(["separate", "inline", "off"])
+                        .help(
+                            "Session-neighbour context of the results: separate (listed in its \
+                             own Context section, not counted in --top-k), inline or off",
+                        ),
+                )
+                .arg(
+                    Arg::new("include-summaries")
+                        .long("include-summaries")
+                        .value_name("BOOL")
+                        .num_args(0..=1)
+                        .require_equals(true)
+                        .default_missing_value("true")
+                        .value_parser(value_parser!(bool))
+                        .help(
+                            "Let session summaries be recalled (=false keeps them out); \
+                             default: the server's choice",
+                        ),
+                ),
         )
         .subcommand(
             Command::new("get")
@@ -611,7 +635,7 @@ pub fn build_memory_command() -> Command {
                         .long("top-k")
                         .default_value("10")
                         .value_parser(value_parser!(usize))
-                        .help("Number of results to return"),
+                        .help("Most ranked results to return"),
                 )
                 .arg(
                     Arg::new("type")
@@ -620,7 +644,31 @@ pub fn build_memory_command() -> Command {
                         .value_parser(["episodic", "semantic", "procedural", "working"])
                         .help("Filter by memory type"),
                 )
-                .arg(memory_lang_arg("Language of the query")),
+                .arg(memory_lang_arg("Language of the query"))
+                .arg(
+                    Arg::new("neighborhood")
+                        .long("neighborhood")
+                        .value_name("MODE")
+                        .default_value("separate")
+                        .value_parser(["separate", "inline", "off"])
+                        .help(
+                            "Session-neighbour context of the results: separate (listed in its \
+                             own Context section, not counted in --top-k), inline or off",
+                        ),
+                )
+                .arg(
+                    Arg::new("include-summaries")
+                        .long("include-summaries")
+                        .value_name("BOOL")
+                        .num_args(0..=1)
+                        .require_equals(true)
+                        .default_missing_value("true")
+                        .value_parser(value_parser!(bool))
+                        .help(
+                            "Let session summaries be recalled (=false keeps them out); \
+                             default: the server's choice",
+                        ),
+                ),
         )
         .subcommand(build_memory_extract_command())
         .subcommand(

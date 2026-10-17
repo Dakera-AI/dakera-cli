@@ -77,6 +77,25 @@ async fn main() {
     }
 }
 
+/// Warnings (on stderr, so `--format json` output stays clean) about where
+/// the API key could be read: a config file other users can read, and a key
+/// that would cross the network in clear text.
+fn warn_about_exposure(url: &str) {
+    if let Some(path) = Config::config_path() {
+        if let Some(warning) = config::permission_warning(&path) {
+            eprintln!("warning: {warning}");
+        }
+    }
+    let has_key = std::env::var("DAKERA_API_KEY").is_ok_and(|k| !k.is_empty());
+    if has_key && config::is_cleartext_remote(url) {
+        eprintln!(
+            "warning: {} is plain http:// to a remote host; DAKERA_API_KEY is sent unencrypted \
+             (use https://)",
+            config::redact_url(url)
+        );
+    }
+}
+
 async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> anyhow::Result<()> {
     let config = match matches.get_one::<String>("profile") {
         Some(p) => Config::load_with_profile(p),
@@ -90,6 +109,7 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
         config.server_url.clone()
     };
 
+    warn_about_exposure(&url);
     let ctx = Context::new(url, format, verbose);
 
     match matches.subcommand() {

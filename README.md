@@ -122,21 +122,26 @@ dk text search "user preferences" --namespace default
 
 ### Config file
 
-`dk init` creates `~/.dakera/config.toml`:
+`dk init` creates `~/.dakera/config.toml` (one profile per server):
 
 ```toml
-[server]
-url = "http://localhost:3000"
-api_key = "dk-mykey"
+active_profile = "default"
 
-[defaults]
-namespace = "default"
+[profiles.default]
+url = "http://localhost:3000"
+default_namespace = "default"
 ```
+
+The API key is never stored in it: `dk` reads it from `DAKERA_API_KEY` only. `dk` writes the file
+readable by its owner only (`0600`, in a `0700` directory) and warns on stderr when it finds the
+file readable by other users. `dk config` shows the key masked (`dk_…9876`), never in full, and
+whether the server URL uses TLS; a key sent over plain `http://` to a host other than the loopback
+interface gets a warning on stderr. TLS certificates are always verified (system trust store).
 
 ### Named profiles
 
 ```bash
-dk config profile add staging --url http://staging:3000 --key dk-staging-key
+dk config profile add staging --url https://staging.example.com:3000
 dk config profile use staging
 dk --profile staging namespace list
 ```
@@ -255,8 +260,14 @@ Store, recall, search, and manage agent memories. This is the primary interface 
 # Store a memory
 dk memory store my-agent "The user likes dark mode" --importance 0.8 --type semantic
 
-# Recall by semantic query
+# Recall by semantic query: at most --top-k ranked results, then a separate "Context"
+# section with the session neighbours of those results (which result each belongs to).
+# A MATCHED_TEXT column appears when the server collapsed sentence sub-memories into a result.
 dk memory recall my-agent "UI preferences" --top-k 10
+# --neighborhood separate (default) | inline | off; --include-summaries[=false]
+dk memory recall my-agent "UI preferences" --neighborhood off --include-summaries=false
+# JSON: {"memories": [...], "context_memories": [...]} (matched_text, context_of, context_of_rank)
+dk --format json memory recall my-agent "UI preferences"
 
 # Full-text search within an agent's memories
 dk memory search my-agent "dark mode" --top-k 5

@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Follows the engine's recall API correctness and security hardening work (Dakera-AI/dakera#917,
+#920, engine PR #922). Compatible with v0.12.2 and older servers.
+
+### Fixed
+
+- **`dk memory recall` shows at most `--top-k` ranked results.** The server appended
+  session-neighbourhood context after the ranked results, so `--top-k 5` could print 7 rows. The
+  command now asks for `neighborhood_mode: "separate"` and prints the context in its own
+  **Context** section after the ranked table, each row saying which result it belongs to
+  (`#2 <id>`). A server that predates `neighborhood_mode` (v0.12.2 and older) appends its context
+  unmarked: the rows past `--top-k` are left out with a warning (under `--neighborhood inline` they
+  are shown as context).
+- `dk --format json|compact memory recall` printed `ℹ Found N memories` before the JSON on
+  stdout; stdout is now one JSON document and notes go to stderr.
+- `dk keys get|delete|deactivate|rotate|usage` and `dk admin optimize|backup-delete` percent-encode
+  the id in the path; `dk keys *` errors carry the usual exit code and hint instead of the raw body.
+- `dk keys create --format json` prints the server's answer as JSON.
+- README: the config file example showed an `api_key` and `--key` that `dk` never read.
+
+### Added
+
+- `dk memory recall --neighborhood <separate|inline|off>` (default `separate`; `off` also sends
+  `neighborhood: false`, which older servers honour) and `--include-summaries[=false]` (sent only
+  when given).
+- A `MATCHED_TEXT` column when the server collapsed derived sentence sub-memories into a result
+  (`DAKERA_RECALL_COLLAPSE_DERIVED`).
+- `--format json` for `memory recall` prints `{"memories": [...], "context_memories": [...]}`, with
+  `matched_text` / `matched_ids` on ranked results and `context_of` / `context_of_rank` on context.
+  (It was an array of rows.)
+- A hint for the `422` (or `400`) "unknown field" refusal that the admin key, backup and
+  rotate-key routes answer from the next server release on, naming the field.
+
+### Security
+
+- `~/.dakera/config.toml` is written `0600` (its directory `0700` when created), an existing file is
+  narrowed to `0600` on write, and a file readable by other users gets a warning on stderr.
+- `dk config` shows `DAKERA_API_KEY` masked (first 3 and last 4 characters) and the transport (TLS
+  or plain http); a password in the server URL is masked.
+- A warning on stderr when `DAKERA_API_KEY` is set and the server URL is plain `http://` to a host
+  other than the loopback interface.
+- Raw requests time out: 10 s to connect, 330 s between reads (longer than the 300 s
+  `encryption-rotate --wait-secs` may ask the server to wait).
+- Dependencies: rustls 0.23.46 (RUSTSEC-2026-0346, -0347, -0348, -0349), quinn-proto 0.11.19
+  (RUSTSEC-2026-0338 to -0342), chacha20 0.10.2 (0.10.1 was yanked).
+
 ## [0.8.1] - 2026-10-08
 
 Support for Dakera server **v0.12.2** (Dakera-AI/dakera#916). Compatible with v0.11.108,

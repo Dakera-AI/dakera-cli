@@ -1620,7 +1620,8 @@ fn memory_recall_sends_lang() {
                 "top_k": 3,
                 "min_importance": 0.0,
                 "tags": [],
-                "lang": "fr"
+                "lang": "fr",
+                "neighborhood_mode": "separate"
             }));
         then.status(200)
             .json_body(json!({"memories": [], "total_found": 0}));

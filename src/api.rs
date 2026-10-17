@@ -85,6 +85,17 @@ impl ApiHttpError {
                 None => HINT_BUSY.to_string(),
             });
         }
+        // Since v0.12.3 the admin key, backup and rotate-key requests refuse a
+        // field they do not know instead of ignoring it.
+        if self.status == 422 || self.status == 400 {
+            if let Some(field) = unknown_field(&self.message) {
+                return Some(format!(
+                    "the server does not accept the field `{field}` on this route (admin key, \
+                     backup and encryption requests refuse unknown fields since v0.12.3); this \
+                     dk may be newer than the server, or the field is misspelled"
+                ));
+            }
+        }
         let pinned = self.details_contain("namespace: *");
         let super_admin = self.details_contain("required: super_admin");
         let hint = match (self.status, code) {
@@ -102,6 +113,13 @@ impl ApiHttpError {
         };
         Some(hint.to_string())
     }
+}
+
+/// The field serde names in an "unknown field `x`, expected ..." refusal.
+pub fn unknown_field(message: &str) -> Option<&str> {
+    let start = message.find("unknown field `")? + "unknown field `".len();
+    let len = message[start..].find('`')?;
+    Some(&message[start..start + len])
 }
 
 const HINT_AUTH: &str = "authentication failed: set DAKERA_API_KEY to a valid, unexpired API key";
@@ -465,6 +483,18 @@ mod tests {
     fn empty_body_falls_back_to_the_status() {
         let e = raw(404, None, "");
         assert_eq!(e.message, "404 Not Found");
+    }
+
+    #[test]
+    fn unknown_field_refusal_names_the_field() {
+        let error = "Failed to deserialize the JSON body into the target type: unknown field \
+                     `encrypted`, expected one of `name`, `backup_type`, `encrypt`";
+        let e = answer(422, "INVALID_REQUEST", error, None);
+        let hint = e.hint().unwrap();
+        assert!(hint.contains("`encrypted`"), "{hint}");
+        assert!(e.to_string().contains("hint:"));
+        let e = answer(400, "INVALID_REQUEST", "missing field `name`", None);
+        assert!(e.hint().is_none());
     }
 
     #[test]
