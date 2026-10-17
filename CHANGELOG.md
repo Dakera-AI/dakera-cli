@@ -7,8 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Follows the engine's recall API correctness and security hardening work (Dakera-AI/dakera#917,
-#920, engine PR #922). Compatible with v0.12.2 and older servers.
+## [0.8.2] - Unreleased
+
+Support for Dakera server **v0.12.3**. Follows the engine's recall API correctness and security
+hardening work (Dakera-AI/dakera#917, #920, engine PR #922; merge this after it, as its merge tags
+v0.12.3). Compatible with v0.11.108 and v0.12.0 – v0.12.2 servers as before; `--neighborhood`,
+`--include-summaries`, the Context section's `context_of`, the unknown-field hint and `dk document` need v0.12.3.
+
+### Breaking
+
+- **`dk --format json|compact memory recall` prints one object,
+  `{"memories": [...], "context_memories": [...]}`, instead of an array of result rows** (approved
+  by the owner). Read the ranked results from `.memories` (for example
+  `dk -f json memory recall a q | jq '.memories[].id'`); the neighbourhood context is in
+  `.context_memories`. The old output could not be parsed as it was anyway: an `ℹ Found N memories`
+  line came before the JSON on stdout.
 
 ### Fixed
 
@@ -28,16 +41,27 @@ Follows the engine's recall API correctness and security hardening work (Dakera-
 
 ### Added
 
+- **`dk document`** (Dakera v0.12.3, Dakera-AI/dakera#923): `import <file|->` turns a text,
+  Markdown, HTML, PDF or DOCX file into chunk memories of `--agent` (text formats through
+  `POST /v1/memory/documents`; PDF / DOCX, and text that is not UTF-8, uploaded as an attachment to
+  the agent's namespace and imported through `POST /v1/namespaces/{ns}/attachments/{ref}/document`),
+  with `--title`, `--document-id`, `--media-type` (else from the extension), `--tag`, `--session-id`,
+  `--type`, `--importance`, `--lang`, `--chunk-tokens`, `--overlap`, `--strategy structure|fixed`,
+  `--decompose`, `--wait` / `--timeout`; `job <id>`, `list` (`--limit`, `--cursor`), `show <id>`
+  (the chunks with pages and heading paths) and `delete <id>`, in table and JSON. On a server
+  before v0.12.3 the commands say it is needed. Shell completions include them.
+- `dk memory recall` cites document chunks: a `SOURCE` column (`Field Manual, p. 39-40 › Install`)
+  and `document` (`document_id`, `title`, `page_start` / `page_end`, `heading_path`,
+  `chunk_index`) in JSON, on ranked results and context.
 - `dk memory recall --neighborhood <separate|inline|off>` (default `separate`; `off` also sends
   `neighborhood: false`, which older servers honour) and `--include-summaries[=false]` (sent only
   when given).
 - A `MATCHED_TEXT` column when the server collapsed derived sentence sub-memories into a result
   (`DAKERA_RECALL_COLLAPSE_DERIVED`).
-- `--format json` for `memory recall` prints `{"memories": [...], "context_memories": [...]}`, with
-  `matched_text` / `matched_ids` on ranked results and `context_of` / `context_of_rank` on context.
-  (It was an array of rows.)
+- `--format json` for `memory recall` carries `matched_text` / `matched_ids` on ranked results and
+  `context_of` / `context_of_rank` on context (see **Breaking** for the new shape).
 - A hint for the `422` (or `400`) "unknown field" refusal that the admin key, backup and
-  rotate-key routes answer from the next server release on, naming the field.
+  rotate-key routes answer from Dakera v0.12.3 on, naming the field.
 
 ### Security
 

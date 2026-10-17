@@ -14,8 +14,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::cli::build_cli;
 use crate::commands::{
-    admin, agent, attachment, capabilities, completion, config as config_cmd, health, index, init,
-    keys, knowledge, memory, namespace, session, text,
+    admin, agent, attachment, capabilities, completion, config as config_cmd, document, health,
+    index, init, keys, knowledge, memory, namespace, session, text,
 };
 use crate::config::Config;
 use crate::context::Context;
@@ -118,6 +118,7 @@ async fn run(matches: clap::ArgMatches, format: OutputFormat, verbose: bool) -> 
         Some(("capabilities", _)) => capabilities::execute(&ctx).await?,
         Some(("whoami", _)) => keys::whoami(&ctx).await?,
         Some(("attachment", sub_matches)) => attachment::execute(&ctx, sub_matches).await?,
+        Some(("document", sub_matches)) => document::execute(&ctx, sub_matches).await?,
         Some(("namespace", sub_matches)) => namespace::execute(&ctx, sub_matches).await?,
         Some(("index", sub_matches)) => index::execute(&ctx, sub_matches).await?,
         Some(("memory", sub_matches)) => memory::execute(&ctx, sub_matches).await?,

@@ -85,6 +85,10 @@ pub struct RecallRow {
     /// The ids of the collapsed sentence sub-memories, best first.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_ids: Option<Vec<String>>,
+    /// Where the result comes from, when it is a chunk of an imported
+    /// document (`_dakera_document`, Dakera v0.12.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document: Option<super::document::Citation>,
 }
 
 /// One neighbourhood-context entry of `dk memory recall`.
@@ -104,6 +108,9 @@ pub struct ContextRow {
     /// The raw similarity of the neighbourhood search: not comparable with
     /// the ranked results' scores.
     pub score: f32,
+    /// Where the memory comes from, when it is a document chunk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document: Option<super::document::Citation>,
 }
 
 /// What `dk memory recall` shows: at most `--top-k` ranked results, and the
@@ -163,6 +170,7 @@ fn recall_row(item: &serde_json::Value) -> Result<RecallRow> {
         score: m.score,
         matched_text: api::str_of(item, "matched_text").map(str::to_string),
         matched_ids,
+        document: super::document::citation(item),
     })
 }
 
@@ -214,6 +222,7 @@ pub fn shape_recall(answer: &serde_json::Value, top_k: usize, mode: &str) -> Res
             context_of,
             context_of_rank,
             score: m.score,
+            document: super::document::citation(item),
         });
     }
     Ok(RecallView {
@@ -223,28 +232,9 @@ pub fn shape_recall(answer: &serde_json::Value, top_k: usize, mode: &str) -> Res
     })
 }
 
-/// A ranked-results table row without the `matched_*` columns, for answers
-/// that have none.
-#[derive(Serialize)]
-struct PlainRecallRow<'a> {
-    id: &'a str,
-    content: &'a str,
-    memory_type: &'a str,
-    importance: f32,
-    score: f32,
-}
-
-/// A context table row: `context_of` reads `#<rank> <id>`.
-#[derive(Serialize)]
-struct ContextTableRow<'a> {
-    id: &'a str,
-    content: &'a str,
-    context_of: String,
-    score: f32,
-}
-
 /// Print a recall: the ranked table (with a `matched_text` column when a
-/// result has one), then a separate Context section. JSON / compact print
+/// result has one, and a `source` column citing document chunks), then a
+/// separate Context section. JSON / compact print
 /// `{"memories": [...], "context_memories": [...]}` and nothing else on
 /// stdout; the notes go to stderr there.
 pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
@@ -269,22 +259,29 @@ pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
         output::info("No memories found");
     } else {
         output::info(&found_message(view.memories.len(), 0));
-        if view.memories.iter().any(|r| r.matched_text.is_some()) {
-            output::print_data(&view.memories, format);
-        } else {
-            let rows: Vec<PlainRecallRow> = view
-                .memories
-                .iter()
-                .map(|r| PlainRecallRow {
-                    id: &r.id,
-                    content: &r.content,
-                    memory_type: &r.memory_type,
-                    importance: r.importance,
-                    score: r.score,
-                })
-                .collect();
-            output::print_data(&rows, format);
-        }
+        let matched = view.memories.iter().any(|r| r.matched_text.is_some());
+        let cited = view.memories.iter().any(|r| r.document.is_some());
+        let rows: Vec<serde_json::Value> = view
+            .memories
+            .iter()
+            .map(|r| {
+                let mut row = serde_json::json!({
+                    "id": r.id,
+                    "content": r.content,
+                    "memory_type": r.memory_type,
+                    "importance": r.importance,
+                    "score": r.score,
+                });
+                if matched {
+                    row["matched_text"] = serde_json::json!(r.matched_text);
+                }
+                if cited {
+                    row["source"] = serde_json::json!(r.document.as_ref().map(|d| d.line()));
+                }
+                row
+            })
+            .collect();
+        output::print_data(&rows, format);
     }
     if view.context_memories.is_empty() {
         return;
@@ -295,18 +292,26 @@ pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
          --top-k; scores come from another search)",
         view.context_memories.len()
     ));
-    let rows: Vec<ContextTableRow> = view
+    let cited = view.context_memories.iter().any(|c| c.document.is_some());
+    let rows: Vec<serde_json::Value> = view
         .context_memories
         .iter()
-        .map(|c| ContextTableRow {
-            id: &c.id,
-            content: &c.content,
-            context_of: match (c.context_of_rank, c.context_of.as_deref()) {
+        .map(|c| {
+            let context_of = match (c.context_of_rank, c.context_of.as_deref()) {
                 (Some(rank), Some(id)) => format!("#{rank} {id}"),
                 (None, Some(id)) => id.to_string(),
                 _ => "-".to_string(),
-            },
-            score: c.score,
+            };
+            let mut row = serde_json::json!({
+                "id": c.id,
+                "content": c.content,
+                "context_of": context_of,
+                "score": c.score,
+            });
+            if cited {
+                row["source"] = serde_json::json!(c.document.as_ref().map(|d| d.line()));
+            }
+            row
         })
         .collect();
     output::print_data(&rows, format);

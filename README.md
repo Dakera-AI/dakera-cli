@@ -240,6 +240,31 @@ to stderr) and exits 5 if the job fails with a `400`, 6 on a `5xx`.
 
 ---
 
+### `dk document`
+
+Import a document as chunk memories of an agent (Dakera v0.12.3): each chunk keeps its heading path
+and page, so `dk memory recall` can cite it (a `SOURCE` column, `document` in JSON). Text, Markdown
+and HTML are sent as text; PDF and DOCX (and text that is not UTF-8) are uploaded as an attachment to
+the agent's namespace (`--namespace` to pick another) and imported from there, which needs
+`DAKERA_ATTACHMENTS` on the server. The format comes from the extension (`.txt`, `.md`, `.html`,
+`.pdf`, `.docx`; `-` reads stdin as text) unless `--media-type` says otherwise.
+
+```bash
+dk document import guide.md --agent docs-bot --wait
+dk document import manual.pdf --agent docs-bot --document-id manual-v3 --tag manual --wait
+dk document import notes.txt --agent docs-bot --chunk-tokens 300 --overlap 30 --strategy fixed
+cat page.html | dk document import - --agent docs-bot --media-type text/html --title "Release notes"
+dk document job job_17_3 --agent docs-bot      # Pending / Running (progress) / Completed / Failed
+dk document list --agent docs-bot --limit 20    # then --cursor <next_cursor>
+dk document show manual-v3 --agent docs-bot     # the document and its chunks (pages, headings)
+dk document delete manual-v3 --agent docs-bot   # every chunk memory of it
+```
+
+Re-importing the same `--document-id` replaces the document (unchanged chunks are kept as they are).
+Other flags: `--title`, `--session-id`, `--type`, `--importance`, `--lang`, `--decompose` (also
+derive sentence sub-memories per chunk), `--timeout` (with `--wait`, default 600 s). A server before
+v0.12.3 has no document routes: `dk` says so.
+
 ### `dk namespace`
 
 Manage namespaces.
@@ -267,7 +292,7 @@ dk memory recall my-agent "UI preferences" --top-k 10
 # --neighborhood separate (default) | inline | off; --include-summaries[=false]
 dk memory recall my-agent "UI preferences" --neighborhood off --include-summaries=false
 # JSON: {"memories": [...], "context_memories": [...]} (matched_text, context_of, context_of_rank)
-dk --format json memory recall my-agent "UI preferences"
+dk --format json memory recall my-agent "UI preferences" | jq '.memories[].id'
 
 # Full-text search within an agent's memories
 dk memory search my-agent "dark mode" --top-k 5
@@ -520,7 +545,23 @@ dk completion powershell
 
 ## Dakera v0.12 and compatibility
 
-`dk` 0.8 works against Dakera **v0.11.108, v0.12.0, v0.12.1 and v0.12.2** servers
+> **Breaking in dk 0.8.2:** `dk --format json|compact memory recall` prints one object,
+> `{"memories": [...], "context_memories": [...]}`, instead of an array of rows: read the ranked
+> results from `.memories`.
+
+The 0.8.2 additions need a **v0.12.3** server; older servers ignore them, as noted:
+
+| Command (0.8.2) | v0.12.2 and older | v0.12.3 |
+|---|---|---|
+| `dk memory recall` (`--neighborhood separate`, the default) | the server appends its context to the results unmarked: `dk` shows the first `--top-k` and warns how many it left out | at most `--top-k` ranked results, then the Context section with `context_of` |
+| `dk memory recall --include-summaries[=false]` | ignored | yes |
+| `MATCHED_TEXT` column | never shown | when the server collapses derived sentences (`DAKERA_RECALL_COLLAPSE_DERIVED`) |
+| the unknown-field hint (`keys create`, `admin backup-create`, `admin encryption-rotate`) | not needed: unknown fields are ignored | a misspelled field is a `422`, with a hint naming it |
+| `dk document ...` | no route: `dk` says it needs v0.12.3 | yes (`DAKERA_DOCUMENTS`, on by default; PDF / DOCX also need `DAKERA_ATTACHMENTS`) |
+| `SOURCE` column / `document` in `memory recall` | never shown | for results that are document chunks |
+| `dk admin` / `dk keys` commands | as before | as before; `POST /ops/shutdown` (no `dk` command) needs a `super_admin` key |
+
+`dk` 0.8.2 works against Dakera **v0.11.108 and v0.12.0 – v0.12.3** servers
 (it uses `dakera-client` 0.12). The new commands need the server release that has
 the route or field:
 

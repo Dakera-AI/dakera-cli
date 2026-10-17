@@ -51,6 +51,7 @@ pub fn build_cli() -> Command {
         .subcommand(build_capabilities_command())
         .subcommand(build_whoami_command())
         .subcommand(build_attachment_command())
+        .subcommand(build_document_command())
         .subcommand(build_namespace_command())
         .subcommand(build_index_command())
         .subcommand(build_memory_command())
@@ -223,6 +224,148 @@ fn build_attachment_job_command() -> Command {
         .arg(kind)
         .arg(wait)
         .arg(timeout)
+}
+
+/// `dk document`: document import (Dakera v0.12.3).
+pub fn build_document_command() -> Command {
+    let long_about = "Documents imported as chunk memories of an agent (Dakera v0.12.3): text, \
+         Markdown and HTML are sent as text; PDF and DOCX are uploaded as an attachment to the \
+         agent's namespace (needs DAKERA_ATTACHMENTS on the server) and imported from there. \
+         Each chunk keeps its heading path and page, so `dk memory recall` can cite it.";
+    let agent = Arg::new("agent")
+        .short('a')
+        .long("agent")
+        .required(true)
+        .help("Agent ID");
+    let import = Command::new("import")
+        .about("Import a file (or - for stdin) as chunk memories; runs as a background job")
+        .arg(
+            Arg::new("file")
+                .required(true)
+                .help("File to import (.txt, .md, .html, .pdf, .docx), or - for stdin"),
+        )
+        .arg(agent.clone())
+        .arg(
+            Arg::new("title")
+                .long("title")
+                .help("Document title (default: from the document)"),
+        )
+        .arg(Arg::new("document-id").long("document-id").help(
+            "Document id (default: derived from the content; the same id replaces the document)",
+        ))
+        .arg(
+            Arg::new("media-type")
+                .long("media-type")
+                .help("Media type (default: from the extension; stdin: text/plain)"),
+        )
+        .arg(
+            Arg::new("tag")
+                .long("tag")
+                .action(ArgAction::Append)
+                .help("Tag every chunk (repeatable)"),
+        )
+        .arg(
+            Arg::new("session-id")
+                .long("session-id")
+                .help("Session of the chunks"),
+        )
+        .arg(
+            Arg::new("type")
+                .short('t')
+                .long("type")
+                .value_parser(["episodic", "semantic", "procedural", "working"])
+                .help("Memory type of the chunks"),
+        )
+        .arg(
+            Arg::new("importance")
+                .long("importance")
+                .value_parser(value_parser!(f32))
+                .help("Importance of the chunks (0.0-1.0)"),
+        )
+        .arg(
+            Arg::new("lang")
+                .long("lang")
+                .help("Language of the document"),
+        )
+        .arg(
+            Arg::new("chunk-tokens")
+                .long("chunk-tokens")
+                .value_parser(value_parser!(u64))
+                .help("Chunk budget in tokens (server default 400)"),
+        )
+        .arg(
+            Arg::new("overlap")
+                .long("overlap")
+                .value_parser(value_parser!(u64))
+                .help("Tokens repeated from the previous chunk (server default 50)"),
+        )
+        .arg(
+            Arg::new("strategy")
+                .long("strategy")
+                .value_parser(["structure", "fixed"])
+                .help("structure (sections at headings, the default) or fixed (token windows)"),
+        )
+        .arg(
+            Arg::new("decompose")
+                .long("decompose")
+                .action(ArgAction::SetTrue)
+                .help("Also derive sentence sub-memories from every chunk"),
+        )
+        .arg(
+            Arg::new("namespace")
+                .short('n')
+                .long("namespace")
+                .help("Namespace to upload a PDF/DOCX to (default: _dakera_agent_<agent>)"),
+        )
+        .arg(
+            Arg::new("wait")
+                .long("wait")
+                .action(ArgAction::SetTrue)
+                .help("Wait for the import job to finish"),
+        )
+        .arg(
+            Arg::new("timeout")
+                .long("timeout")
+                .value_parser(value_parser!(u64))
+                .default_value("600")
+                .help("With --wait: give up after this many seconds"),
+        );
+    let job = Command::new("job")
+        .about("Status of an import job")
+        .arg(Arg::new("job_id").required(true).help("Job ID"))
+        .arg(agent.clone());
+    let list = Command::new("list")
+        .about("List an agent's documents")
+        .arg(agent.clone())
+        .arg(
+            Arg::new("limit")
+                .long("limit")
+                .value_parser(value_parser!(u64).range(1..=500))
+                .help("Documents per page (1-500, server default 50)"),
+        )
+        .arg(
+            Arg::new("cursor")
+                .long("cursor")
+                .help("The next_cursor of the previous page"),
+        );
+    let show = Command::new("show")
+        .about("Show a document and its chunks")
+        .arg(Arg::new("document_id").required(true).help("Document ID"))
+        .arg(agent.clone());
+    let delete = Command::new("delete")
+        .about("Delete a document (every chunk memory of it)")
+        .arg(Arg::new("document_id").required(true).help("Document ID"))
+        .arg(agent);
+    Command::new("document")
+        .visible_alias("documents")
+        .about("Documents: import PDF, DOCX, HTML, Markdown or text as chunk memories (v0.12.3)")
+        .long_about(long_about)
+        .subcommand_required(true)
+        .subcommand(import)
+        .subcommand(job)
+        .subcommand(list)
+        .subcommand(show)
+        .subcommand(delete)
 }
 
 pub fn build_attachment_command() -> Command {
