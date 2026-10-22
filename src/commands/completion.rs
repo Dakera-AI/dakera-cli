@@ -9,7 +9,7 @@ use crate::output;
 
 /// All top-level `dk` subcommands (used in every shell script).
 const TOP_LEVEL_CMDS: &str =
-    "init health capabilities whoami attachment namespace index memory session agent knowledge admin keys config completion";
+    "init health capabilities whoami attachment document namespace index memory session agent knowledge admin keys config completion";
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
@@ -125,6 +125,10 @@ _dk() {{
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
                 "upload list download delete transcribe index job" -- "$cur"))
             ;;
+        document)
+            [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
+                "import job list show delete" -- "$cur"))
+            ;;
         keys)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
                 "create list get edit patch delete deactivate rotate usage" -- "$cur"))
@@ -198,6 +202,7 @@ _dk() {
                 'capabilities:Show what the server supports'
                 'whoami:Show the API key in use'
                 'attachment:Attachments: upload, transcribe, index'
+                'document:Documents: import PDF, DOCX, HTML, Markdown, text'
                 'namespace:Manage namespaces'
                 'index:Index management'
                 'memory:Memory operations'
@@ -368,6 +373,17 @@ _dk() {
                     _arguments '1: :->subcmd'
                     [[ $state == subcmd ]] && _describe 'attachment subcommand' at_cmds
                     ;;
+                document)
+                    local doc_cmds=(
+                        'import:Import a document as chunk memories'
+                        'job:Show an import job'
+                        'list:List documents'
+                        'show:Show a document and its chunks'
+                        'delete:Delete a document'
+                    )
+                    _arguments '1: :->subcmd'
+                    [[ $state == subcmd ]] && _describe 'document subcommand' doc_cmds
+                    ;;
             esac
             ;;
     esac
@@ -385,7 +401,7 @@ fn fish_script() -> &'static str {
 
 function __dk_no_subcommand
     for i in (commandline -opc)
-        if contains -- $i init health capabilities attachment namespace index \
+        if contains -- $i init health capabilities attachment document namespace index \
                        memory session agent knowledge admin keys config completion
             return 1
         end
@@ -424,6 +440,7 @@ complete -c dk -f -n '__dk_no_subcommand' -a 'health'     -d 'Check server healt
 complete -c dk -f -n '__dk_no_subcommand' -a 'capabilities' -d 'Show what the server supports'
 complete -c dk -f -n '__dk_no_subcommand' -a 'whoami' -d 'Show the API key in use'
 complete -c dk -f -n '__dk_no_subcommand' -a 'attachment' -d 'Attachments: upload, transcribe, index'
+complete -c dk -f -n '__dk_no_subcommand' -a 'document' -d 'Documents: import PDF, DOCX, HTML, Markdown, text'
 complete -c dk -f -n '__dk_no_subcommand' -a 'namespace'  -d 'Manage namespaces'
 complete -c dk -f -n '__dk_no_subcommand' -a 'index'      -d 'Index management'
 complete -c dk -f -n '__dk_no_subcommand' -a 'memory'     -d 'Memory operations'
@@ -521,6 +538,11 @@ complete -c dk -f -n '__dk_using_subcommand attachment' -a 'delete'     -d 'Dele
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'transcribe' -d 'Transcribe audio into a memory'
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'index'      -d 'Index an image as a visual memory'
 complete -c dk -f -n '__dk_using_subcommand attachment' -a 'job'        -d 'Show a transcription or index job'
+complete -c dk -f -n '__dk_using_subcommand document' -a 'import' -d 'Import a document as chunk memories'
+complete -c dk -f -n '__dk_using_subcommand document' -a 'job'    -d 'Show an import job'
+complete -c dk -f -n '__dk_using_subcommand document' -a 'list'   -d 'List documents'
+complete -c dk -f -n '__dk_using_subcommand document' -a 'show'   -d 'Show a document and its chunks'
+complete -c dk -f -n '__dk_using_subcommand document' -a 'delete' -d 'Delete a document'
 complete -c dk -f -n '__dk_using_subcommand admin' -a 'backup-delete'   -d 'Delete backup'
 complete -c dk -n '__dk_using_subcommand admin' -l namespace -s n -d 'Namespace' -r -a '(__dk_namespaces)'
 

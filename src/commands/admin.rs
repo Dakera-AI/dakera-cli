@@ -67,7 +67,10 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("optimize", sub)) => {
             let namespace = sub.get_one::<String>("namespace").unwrap();
-            let path = format!("/admin/namespaces/{}/optimize", namespace);
+            let path = format!(
+                "/admin/namespaces/{}/optimize",
+                crate::api::segment(namespace)
+            );
             let t = ctx.log_request("POST", &path);
             let result = admin_post(&ctx.url, &path, None).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
@@ -220,7 +223,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("backup-delete", sub)) => {
             let backup_id = sub.get_one::<String>("backup_id").unwrap();
-            let path = format!("/admin/backups/{}", backup_id);
+            let path = format!("/admin/backups/{}", crate::api::segment(backup_id));
             let t = ctx.log_request("DELETE", &path);
             let result = admin_delete(&ctx.url, &path).await;
             ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
