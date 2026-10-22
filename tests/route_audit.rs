@@ -1,5 +1,5 @@
 //! Every server path `dk` calls must be a route of the Dakera v0.12 server
-//! (v0.12.0 plus the routes v0.12.2 adds).
+//! (v0.12.0 plus the routes v0.12.2 and v0.12.3 add).
 //!
 //! The route list (`tests/server_routes_v0.12.txt`) comes from the server's
 //! router (`crates/api/src/lib.rs`); the paths `dk` calls are the string

@@ -643,7 +643,7 @@ See the server's `docs/v0.12/UPGRADE.md` ("Going back to v0.11.108") for what
 | 3 | Not found |
 | 4 | Permission denied / authentication failure (`401`, `403`) |
 | 5 | Invalid input (`400`, `409`, `413`, `415`, `422`, or a bad argument) |
-| 6 | Server-side error (5xx, including `501` feature disabled and `503` busy/starting) |
+| 6 | Server-side error (5xx, including `501` feature disabled and `503` busy/starting), or `429` server overloaded (retry after its `Retry-After`) |
 
 Scripts can check `$?` after each command.
 

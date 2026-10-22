@@ -1913,3 +1913,221 @@ fn memory_batch_forget_dry_run_shows_preview() {
     .success()
     .stdout(predicate::str::contains("dry-run"));
 }
+
+// ---------------------------------------------------------------------------
+// Container — Dakera v0.12.3 (documents, recall ranking, empty agents)
+// Skipped against an older server: CI's container may be an earlier release.
+// ---------------------------------------------------------------------------
+
+/// The `--format json` output of a `dk` run, which must succeed.
+fn container_json(url: &str, key: &str, args: &[&str]) -> serde_json::Value {
+    let out = container_dk(url, key)
+        .args(["--format", "json"])
+        .args(args)
+        .output()
+        .expect("dk runs");
+    assert!(
+        out.status.success(),
+        "dk {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|e| panic!("dk {args:?} printed no JSON ({e})"))
+}
+
+/// Whether the server is v0.12.3 or newer (from `dk health`).
+fn server_is_v0123(url: &str, key: &str) -> bool {
+    let health = container_json(url, key, &["health"]);
+    let version = health["version"].as_str().unwrap_or("0.0.0");
+    let parts: Vec<u64> = version
+        .split(['.', '-'])
+        .take(3)
+        .map(|p| p.parse().unwrap_or(0))
+        .collect();
+    let ok = parts >= vec![0, 12, 3];
+    if !ok {
+        eprintln!("skipped: the server is v{version}, this test needs v0.12.3");
+    }
+    ok
+}
+
+/// A file under the temp dir, unique to this test run.
+fn temp_file(name: &str, contents: &[u8]) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("dk-it-{}-{name}", std::process::id()));
+    std::fs::write(&path, contents).unwrap();
+    path
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_v0123_document_import_cite_and_delete() {
+    let url = container_url();
+    let key = container_key();
+    if !server_is_v0123(&url, &key) {
+        return;
+    }
+    let agent = format!("it-doc-{}", std::process::id());
+    let file = temp_file(
+        "manual.md",
+        b"# Field Manual\n\n## Install\n\nRun the installer and accept the licence. \
+          The service listens on port 8080.\n\n## Upgrade\n\nStop the service first, \
+          then replace the binary.\n",
+    );
+
+    let imported = container_json(
+        &url,
+        &key,
+        &[
+            "document",
+            "import",
+            file.to_str().unwrap(),
+            "--agent",
+            &agent,
+            "--title",
+            "Field Manual",
+            "--wait",
+        ],
+    );
+    std::fs::remove_file(&file).ok();
+    let status = imported["job"]["status"].as_str().unwrap_or("");
+    assert!(status.eq_ignore_ascii_case("completed"), "{imported}");
+    let document_id = imported["accepted"]["document_id"]
+        .as_str()
+        .expect("document_id")
+        .to_string();
+
+    let listed = container_json(&url, &key, &["document", "list", "--agent", &agent]);
+    let docs = listed["documents"].as_array().unwrap();
+    assert!(docs
+        .iter()
+        .any(|d| d["document_id"] == document_id.as_str()));
+
+    let shown = container_json(
+        &url,
+        &key,
+        &["document", "show", &document_id, "--agent", &agent],
+    );
+    assert!(shown.to_string().contains("Install"), "{shown}");
+
+    // The ranked result cites its document; its neighbour chunk is context,
+    // outside --top-k.
+    let recalled = container_json(
+        &url,
+        &key,
+        &[
+            "memory",
+            "recall",
+            &agent,
+            "which port does the service listen on",
+            "--top-k",
+            "1",
+        ],
+    );
+    let memories = recalled["memories"].as_array().unwrap();
+    assert_eq!(memories.len(), 1, "{recalled}");
+    assert_eq!(memories[0]["document"]["title"], "Field Manual");
+    assert_eq!(memories[0]["document"]["document_id"], document_id.as_str());
+    for c in recalled["context_memories"].as_array().unwrap() {
+        assert_eq!(c["context_of"], memories[0]["id"]);
+    }
+
+    container_dk(&url, &key)
+        .args(["document", "delete", &document_id, "--agent", &agent])
+        .assert()
+        .success();
+    let listed = container_json(&url, &key, &["document", "list", "--agent", &agent]);
+    assert!(!listed.to_string().contains(&document_id));
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_v0123_pdf_import_needs_attachments() {
+    let url = container_url();
+    let key = container_key();
+    if !server_is_v0123(&url, &key) {
+        return;
+    }
+    let caps = container_json(&url, &key, &["capabilities"]);
+    if caps["attachments"]["enabled"] != false {
+        eprintln!("skipped: attachments are enabled on this server");
+        return;
+    }
+    let file = temp_file("x.pdf", b"%PDF-1.4 not really a pdf");
+    let out = container_dk(&url, &key)
+        .args(["document", "import", file.to_str().unwrap()])
+        .args(["--agent", "it-doc-pdf"])
+        .output()
+        .unwrap();
+    std::fs::remove_file(&file).ok();
+    assert_eq!(out.status.code(), Some(6));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("DAKERA_ATTACHMENTS"), "{stderr}");
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_v0123_recall_scores_follow_the_order() {
+    let url = container_url();
+    let key = container_key();
+    if !server_is_v0123(&url, &key) {
+        return;
+    }
+    let agent = format!("it-rank-{}", std::process::id());
+    for text in [
+        "Maya moved to Lisbon in 2021 for a job at a bakery.",
+        "Maya's sister lives in Porto and visits every summer.",
+        "The bakery in Lisbon opens at six in the morning.",
+        "Maya started learning the cello last winter.",
+        "Lisbon trams are crowded on weekday mornings.",
+    ] {
+        container_dk(&url, &key)
+            .args(["memory", "store", &agent, text])
+            .assert()
+            .success();
+    }
+    let recalled = container_json(
+        &url,
+        &key,
+        &[
+            "memory",
+            "recall",
+            &agent,
+            "Where does Maya live?",
+            "--top-k",
+            "5",
+        ],
+    );
+    let scores: Vec<f64> = recalled["memories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["score"].as_f64().unwrap())
+        .collect();
+    assert!(!scores.is_empty());
+    assert!(
+        scores.windows(2).all(|w| w[0] >= w[1]),
+        "listed scores must follow the order: {scores:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires running dakera container (set DAKERA_TEST_URL)"]
+fn container_v0123_search_and_batch_recall_of_an_empty_agent() {
+    let url = container_url();
+    let key = container_key();
+    if !server_is_v0123(&url, &key) {
+        return;
+    }
+    let agent = format!("it-empty-{}", std::process::id());
+    let recalled = container_json(&url, &key, &["memory", "recall", &agent, "anything"]);
+    assert_eq!(recalled["memories"], json!([]));
+    container_dk(&url, &key)
+        .args(["memory", "search", &agent, "anything"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No memories found"));
+    container_dk(&url, &key)
+        .args(["memory", "batch-recall", &agent])
+        .assert()
+        .success();
+}

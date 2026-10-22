@@ -32,6 +32,13 @@ v0.12.3). Compatible with v0.11.108 and v0.12.0 – v0.12.2 servers as before; `
   (`#2 <id>`). A server that predates `neighborhood_mode` (v0.12.2 and older) appends its context
   unmarked: the rows past `--top-k` are left out with a warning (under `--neighborhood inline` they
   are shown as context).
+- **`dk memory recall` lists each result with the server's `rank_score`** (v0.12.3), the score
+  that follows the order of the results. `score` and `smart_score` can rise down the list, because
+  later ranking stages reorder the results after they are scored. Older servers send no
+  `rank_score`; their `smart_score` is listed as before.
+- **A `429` answer exits 6 (server busy), like a `503`, with the `Retry-After` hint.** Since v0.12.3
+  an overloaded server (a full inference or recall queue) answers `429` + `Retry-After` where it
+  answered `503`; `dk` exited 1 on it.
 - `dk --format json|compact memory recall` printed `ℹ Found N memories` before the JSON on
   stdout; stdout is now one JSON document and notes go to stderr.
 - `dk keys get|delete|deactivate|rotate|usage` and `dk admin optimize|backup-delete` percent-encode
@@ -74,7 +81,8 @@ v0.12.3). Compatible with v0.11.108 and v0.12.0 – v0.12.2 servers as before; `
 - Raw requests time out: 10 s to connect, 330 s between reads (longer than the 300 s
   `encryption-rotate --wait-secs` may ask the server to wait).
 - Dependencies: rustls 0.23.46 (RUSTSEC-2026-0346, -0347, -0348, -0349), quinn-proto 0.11.19
-  (RUSTSEC-2026-0338 to -0342), chacha20 0.10.2 (0.10.1 was yanked).
+  (RUSTSEC-2026-0338 to -0342), chacha20 0.10.2 (0.10.1 was yanked), rustls-webpki 0.103.16
+  (RUSTSEC-2026-0382) and webpki-root-certs 1.0.10 (RUSTSEC-2026-0383).
 
 ## [0.8.1] - 2026-10-08
 

@@ -127,8 +127,12 @@ jobs:
         env:
           DAKERA_ROOT_API_KEY: test-integration-key
           DAKERA_AUTH_ENABLED: 'false'
+        # The v0.12.3+ images have no curl; `dakera healthcheck` probes the
+        # REST port instead. This check works on both, so moving the image to
+        # 0.12.3 once it is released is a one-line change. The v0.12.3 tests
+        # in tests/integration.rs skip themselves on an older server.
         options: >-
-          --health-cmd "curl -sf http://localhost:3000/health || exit 1"
+          --health-cmd "if command -v curl >/dev/null 2>&1; then curl -sf http://localhost:3000/health; else dakera healthcheck; fi"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10

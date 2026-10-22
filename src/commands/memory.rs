@@ -75,7 +75,9 @@ pub struct RecallRow {
     pub memory_type: String,
     /// Importance, 0.0 to 1.0.
     pub importance: f32,
-    /// The ranking score (`smart_score`, else `weighted_score`, else `score`).
+    /// The ranking score: the server's `rank_score` (Dakera v0.12.3, the field
+    /// that follows the order of the results), else `smart_score`, else
+    /// `weighted_score`, else `score`.
     pub score: f32,
     /// The derived sentence that matched best, when the server collapsed
     /// sentence sub-memories into this source memory and the sentence
@@ -153,6 +155,18 @@ fn recalled(item: &serde_json::Value) -> Result<dakera_client::memory::RecalledM
         .map_err(|e| anyhow::anyhow!("Failed to parse a recall result: {e}"))
 }
 
+/// The score a ranked result is listed with. Since v0.12.3 the server sends
+/// `rank_score`, which never rises down `memories`; `score` and `smart_score`
+/// can, because later stages (the precision rerank, the per-session cap, the
+/// temporal supplement) reorder the results after they are scored. Older
+/// servers send no `rank_score`: `fallback` is the SDK's pick then.
+fn ranking_score(item: &serde_json::Value, fallback: f32) -> f32 {
+    item.get("rank_score")
+        .and_then(serde_json::Value::as_f64)
+        .map(|v| v as f32)
+        .unwrap_or(fallback)
+}
+
 fn recall_row(item: &serde_json::Value) -> Result<RecallRow> {
     let m = recalled(item)?;
     let matched_ids = item.get("matched_ids").and_then(|v| {
@@ -167,7 +181,7 @@ fn recall_row(item: &serde_json::Value) -> Result<RecallRow> {
         content: m.content,
         memory_type: memory_type_to_string(&m.memory_type),
         importance: m.importance,
-        score: m.score,
+        score: ranking_score(item, m.score),
         matched_text: api::str_of(item, "matched_text").map(str::to_string),
         matched_ids,
         document: super::document::citation(item),
@@ -981,5 +995,43 @@ mod tests {
         let json = serde_json::to_value(&row).unwrap();
         assert_eq!(json["id"], "mem-1");
         assert_eq!(json["memory_type"], "episodic");
+    }
+
+    fn ranked(id: &str, score: f64, smart: f64, rank: Option<f64>) -> serde_json::Value {
+        let mut item = serde_json::json!({
+            "memory": {
+                "id": id, "content": "c", "memory_type": "episodic", "importance": 0.5,
+                "agent_id": "a", "tags": [], "created_at": 1, "last_accessed_at": 1,
+                "access_count": 0
+            },
+            "score": score,
+            "smart_score": smart,
+        });
+        if let Some(r) = rank {
+            item["rank_score"] = serde_json::json!(r);
+        }
+        item
+    }
+
+    /// v0.12.3 (#940): the listed score is `rank_score`, which follows the
+    /// order of the results, while `score` / `smart_score` may rise down it.
+    #[test]
+    fn recall_lists_rank_score_when_the_server_sends_it() {
+        let answer = serde_json::json!({"memories": [
+            ranked("m1", 0.2, 0.5, Some(0.9)),
+            ranked("m2", 0.8, 0.7, Some(0.6)),
+        ]});
+        let view = shape_recall(&answer, 10, "separate").unwrap();
+        let scores: Vec<f32> = view.memories.iter().map(|r| r.score).collect();
+        assert_eq!(scores, vec![0.9, 0.6]);
+    }
+
+    /// A server before v0.12.3 sends no `rank_score`: the SDK's pick
+    /// (`smart_score` first) is listed, as before.
+    #[test]
+    fn recall_without_rank_score_lists_smart_score() {
+        let answer = serde_json::json!({"memories": [ranked("m1", 0.2, 0.5, None)]});
+        let view = shape_recall(&answer, 10, "separate").unwrap();
+        assert_eq!(view.memories[0].score, 0.5);
     }
 }

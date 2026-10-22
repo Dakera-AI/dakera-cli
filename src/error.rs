@@ -13,7 +13,8 @@ use crate::api::ApiHttpError;
 /// - 3  not found (namespace, vector, key, etc.)
 /// - 4  permission denied / authentication failure
 /// - 5  invalid input / validation error
-/// - 6  server-side error (5xx, including 501 feature disabled / 503 busy)
+/// - 6  server-side error (5xx, including 501 feature disabled / 503 busy), or
+///   the server is overloaded (429 since Dakera v0.12.3: retry after `Retry-After`)
 ///
 /// A `413` (payload too large, hard quota exceeded) is an input error (5); a
 /// `403` is a permission error (4), whether the key's scope is too low or the
@@ -131,9 +132,10 @@ pub fn classify(err: &anyhow::Error) -> CliError {
                 return by_status(*status, msg)
             }
             E::QuotaExceeded { .. } | E::PayloadTooLarge { .. } => return CliError::Input(msg),
-            E::FeatureDisabled { .. } | E::NotImplemented { .. } | E::ServiceUnavailable { .. } => {
-                return CliError::Server(msg)
-            }
+            E::FeatureDisabled { .. }
+            | E::NotImplemented { .. }
+            | E::ServiceUnavailable { .. }
+            | E::RateLimitExceeded { .. } => return CliError::Server(msg),
             E::NamespaceNotFound(_) | E::VectorNotFound(_) => return CliError::NotFound(msg),
             E::InvalidRequest(_) => return CliError::Input(msg),
             E::Connection(_) | E::Timeout => return CliError::Connection(msg),
@@ -179,7 +181,10 @@ fn by_status(status: u16, msg: String) -> CliError {
         401 | 403 => CliError::Permission(msg),
         404 => CliError::NotFound(msg),
         400 | 409 | 413 | 415 | 422 => CliError::Input(msg),
-        500..=599 => CliError::Server(msg),
+        // Since v0.12.3 an overloaded server (a full inference or recall
+        // queue) answers 429 + Retry-After where it answered 503: the same
+        // "busy, retry later" class. A namespace rate limit is 429 too.
+        429 | 500..=599 => CliError::Server(msg),
         _ => CliError::Other(msg),
     }
 }
@@ -304,6 +309,26 @@ mod tests {
         assert!(s.contains("\"retry_after_secs\":7"));
         assert!(s.contains("\"http_status\":503"));
         assert!(s.contains("\"server_code\":\"SERVICE_UNAVAILABLE\""));
+    }
+
+    /// v0.12.3: an overloaded server answers 429 + Retry-After (it was 503).
+    #[test]
+    fn test_classify_http_429_overload_is_server_busy_and_keeps_retry_after() {
+        let err = http_err(429, Some(5), "RATE_LIMIT_EXCEEDED");
+        let cli_err = classify(&err);
+        assert!(matches!(cli_err, CliError::Server(_)));
+        assert_eq!(cli_err.exit_code(), 6);
+        let s = serde_json::to_string(&JsonError::from_error(&cli_err, &err)).unwrap();
+        assert!(s.contains("\"retry_after_secs\":5"));
+        assert!(s.contains("\"http_status\":429"));
+    }
+
+    #[test]
+    fn test_classify_sdk_rate_limit_is_server_busy() {
+        let err = anyhow::Error::new(dakera_client::ClientError::RateLimitExceeded {
+            retry_after: Some(5),
+        });
+        assert_eq!(classify(&err).exit_code(), 6);
     }
 
     #[test]
