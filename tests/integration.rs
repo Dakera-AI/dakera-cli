@@ -1358,7 +1358,7 @@ fn container_memory_forget() {
         .args(["memory", "forget", "integration-agent", id.trim()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Deleted"));
+        .stdout(predicate::str::contains("Forgot 1 memory"));
 }
 
 #[test]
