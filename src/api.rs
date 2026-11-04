@@ -68,6 +68,11 @@ impl ApiHttpError {
         }
     }
 
+    /// Whether the message or the details say `needle`.
+    fn mentions(&self, needle: &str) -> bool {
+        self.message.contains(needle) || self.details_contain(needle)
+    }
+
     fn details_contain(&self, needle: &str) -> bool {
         match &self.details {
             Some(d) => d.contains(needle),
@@ -80,10 +85,29 @@ impl ApiHttpError {
     pub fn hint(&self) -> Option<String> {
         let code = self.code.as_deref().unwrap_or("");
         if self.status == 503 || self.status == 429 {
-            return Some(match self.retry_after_secs {
+            let retry = match self.retry_after_secs {
                 Some(secs) => format!("the server asks to retry in {secs}s (Retry-After)"),
                 None => HINT_BUSY.to_string(),
+            };
+            // Dakera v0.12.4: forgetting by `--about` / `--request` needs the
+            // relevance model (and the request detector); a name whose deleted
+            // namespace is still being cleaned up refuses writes for a while.
+            let specific = if self.mentions("relevance model") || self.mentions("detector") {
+                Some(HINT_FORGET_MODEL)
+            } else if self.mentions("not accepting writes") {
+                Some(HINT_FENCED)
+            } else if self.mentions("could not be stored or logged") {
+                Some(HINT_NOT_DURABLE)
+            } else {
+                None
+            };
+            return Some(match specific {
+                Some(why) => format!("{why}; {retry}"),
+                None => retry,
             });
+        }
+        if self.status == 409 && self.mentions("a later change of the same record") {
+            return Some(HINT_SUPERSEDED.to_string());
         }
         // Since v0.12.3 the admin key, backup and rotate-key requests refuse a
         // field they do not know instead of ignoring it.
@@ -105,6 +129,10 @@ impl ApiHttpError {
             (403, "INSUFFICIENT_SCOPE") if super_admin => HINT_SUPER_ADMIN,
             (403, "INSUFFICIENT_SCOPE") => HINT_SCOPE,
             (403, "CROSS_ORIGIN_REQUEST_REFUSED") => HINT_CROSS_ORIGIN,
+            (403, "TENANT_ROUTE") => HINT_TENANT_ROUTE,
+            (403, "TENANT_SUSPENDED") => HINT_TENANT_SUSPENDED,
+            (403, "TENANT_POLICY") => HINT_TENANT_POLICY,
+            (403, "TENANT_MODE_OFF") => HINT_TENANT_MODE_OFF,
             (413, "QUOTA_EXCEEDED") => HINT_QUOTA,
             (413, _) => HINT_TOO_LARGE,
             (501, "FEATURE_DISABLED") => HINT_DISABLED,
@@ -124,6 +152,21 @@ pub fn unknown_field(message: &str) -> Option<&str> {
 
 const HINT_AUTH: &str = "authentication failed: set DAKERA_API_KEY to a valid, unexpired API key";
 const HINT_BUSY: &str = "the server is busy or starting; retry shortly";
+const HINT_FORGET_MODEL: &str = "forgetting by --about or --request needs the server's relevance \
+     model (and, for --request, its request-to-forget detector), which is not loaded yet or failed \
+     to load; forget by memory id meanwhile";
+const HINT_FENCED: &str = "this name belonged to a deleted namespace whose stored state is still \
+     being removed; writes to it are refused until that is done";
+const HINT_NOT_DURABLE: &str = "the change applies now but the server could not store it or log \
+     it, so a restart could undo it; run the command again once the server's storage recovers";
+const HINT_SUPERSEDED: &str = "another change of the same record was made at the same time and \
+     won; nothing of this one was applied. Check the current state and repeat it if still needed";
+const HINT_TENANT_ROUTE: &str = "this command is not available with a Dakera Cloud key";
+const HINT_TENANT_SUSPENDED: &str = "this Dakera Cloud account is suspended; the message says why";
+const HINT_TENANT_POLICY: &str = "the limits of this Dakera Cloud account do not allow this \
+     request; the message names what they refuse";
+const HINT_TENANT_MODE_OFF: &str = "this key belongs to a Dakera Cloud account and is not valid \
+     on this server; use a key this server issued";
 const HINT_PINNED: &str = "this API key is pinned to namespaces; since v0.12 such a key is \
      refused on node-wide routes (/admin/*: backups, encryption, quotas, config). Use a key that \
      is not pinned to a namespace.";
@@ -270,6 +313,45 @@ pub async fn request_json(
     json_of(resp).await
 }
 
+/// [`request_json`] that also returns the status of the successful answer.
+/// Since Dakera v0.12.4 a change the server applied but could not store yet
+/// (an API key revocation or deactivation, a quota, a backup deletion) is
+/// answered `202`: see [`pending_write_note`].
+pub async fn request_json_status(
+    url: &str,
+    method: Method,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<(u16, Value)> {
+    let client = crate::commands::authed_client();
+    let mut req = client.request(method.clone(), format!("{url}{path}"));
+    if let Some(b) = body {
+        req = req.json(b);
+    }
+    let resp = send(req, &method, path).await?;
+    let resp = ensure_success(resp).await?;
+    let status = resp.status().as_u16();
+    Ok((status, json_of(resp).await?))
+}
+
+/// What to tell the user about a `202` answer to a change (Dakera v0.12.4):
+/// it applies now, but the server could not store it yet; it is logged and
+/// retried until it is stored, after a restart too. `None` for any other
+/// status.
+pub fn pending_write_note(status: u16, answer: &Value) -> Option<String> {
+    if status != 202 {
+        return None;
+    }
+    let said = str_of(answer, "message")
+        .or_else(|| str_of(answer, "warning"))
+        .map(str::to_string);
+    Some(said.unwrap_or_else(|| {
+        "the change applies now but is not stored yet: the server logged it and retries until \
+         it is stored, after a restart too (`dk health` lists pending writes)"
+            .to_string()
+    }))
+}
+
 /// [`request_json`] with the verbose request/response log lines.
 pub async fn request_json_logged(
     ctx: &Context,
@@ -318,6 +400,12 @@ pub async fn post_bytes(
     };
     ctx.log_response(t, if result.is_ok() { "OK" } else { "ERR" });
     json_of(result?).await
+}
+
+/// A request type as a JSON body, its `f32` fields written as the SDK sends
+/// them (`0.9`, not the `0.8999999761581421` of `serde_json::to_value`).
+pub fn body_of<T: serde::Serialize>(request: &T) -> Result<Value> {
+    Ok(serde_json::from_slice(&serde_json::to_vec(request)?)?)
 }
 
 /// A string field of a JSON object.
@@ -495,6 +583,52 @@ mod tests {
         assert!(e.to_string().contains("hint:"));
         let e = answer(400, "INVALID_REQUEST", "missing field `name`", None);
         assert!(e.hint().is_none());
+    }
+
+    #[test]
+    fn forget_model_and_fenced_namespace_503s_say_why() {
+        let body = json!({
+            "error": "Service unavailable",
+            "code": "SERVICE_UNAVAILABLE",
+            "details": "forget by description needs the relevance model (not loaded); retry"
+        });
+        let e = raw(503, Some(5), &body.to_string());
+        let hint = e.hint().unwrap();
+        assert!(hint.contains("--about or --request"), "{hint}");
+        assert!(hint.contains("retry in 5s"), "{hint}");
+        let body = json!({
+            "error": "Namespace 'a' is not accepting writes right now (teardown); retry in 5 s",
+            "code": "SERVICE_UNAVAILABLE",
+        });
+        let e = raw(503, Some(5), &body.to_string());
+        assert!(e.hint().unwrap().contains("deleted namespace"));
+    }
+
+    #[test]
+    fn superseded_change_409_and_tenant_refusals_have_hints() {
+        let body = json!({
+            "success": false,
+            "message": "a later change of the same record took over before this one was stored; \
+                        nothing of this one was applied"
+        });
+        let e = raw(409, None, &body.to_string());
+        assert!(e.hint().unwrap().contains("won"));
+        let e = answer(403, "TENANT_ROUTE", "not allowed", None);
+        assert!(e.hint().unwrap().contains("Dakera Cloud"));
+        let e = answer(409, "CONFLICT", "exists", None);
+        assert!(e.hint().is_none());
+    }
+
+    #[test]
+    fn pending_write_note_only_for_202() {
+        let said = json!({ "success": true, "message": "API key 'k' has been deleted on every node now; logged" });
+        assert!(pending_write_note(202, &said)
+            .unwrap()
+            .contains("every node"));
+        assert!(pending_write_note(202, &json!({}))
+            .unwrap()
+            .contains("not stored yet"));
+        assert!(pending_write_note(200, &said).is_none());
     }
 
     #[test]

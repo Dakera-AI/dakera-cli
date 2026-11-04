@@ -1,5 +1,5 @@
 //! Every server path `dk` calls must be a route of the Dakera v0.12 server
-//! (v0.12.0 plus the routes v0.12.2 and v0.12.3 add).
+//! (v0.12.0 plus the routes v0.12.2, v0.12.3 and v0.12.4 add).
 //!
 //! The route list (`tests/server_routes_v0.12.txt`) comes from the server's
 //! router (`crates/api/src/lib.rs`); the paths `dk` calls are the string
@@ -96,6 +96,20 @@ fn every_route_dk_calls_exists_on_the_v012_server() {
         missing.is_empty(),
         "routes the server does not serve: {missing:#?}"
     );
+}
+
+/// The tenant routes of Dakera Cloud (`/v1/tenants/*`, v0.12.4) are not
+/// `dk`'s to call: they are left out of the route list, and no command may
+/// name them.
+#[test]
+fn no_command_calls_a_tenant_route() {
+    for (file, text) in sources() {
+        let production = text.split("#[cfg(test)]").next().unwrap_or("");
+        assert!(
+            !production.contains("/v1/tenants"),
+            "{file} names a Dakera Cloud tenant route"
+        );
+    }
 }
 
 #[test]

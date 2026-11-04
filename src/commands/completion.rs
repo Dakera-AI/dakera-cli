@@ -99,7 +99,7 @@ _dk() {{
             ;;
         memory)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W \
-                "store batch-store recall get update forget search extract importance consolidate feedback" -- "$cur"))
+                "store batch-store recall get update forget forget-detect trash restore search extract importance consolidate feedback" -- "$cur"))
             ;;
         session)
             [[ -z "$sub" ]] && COMPREPLY=($(compgen -W "start touch end get list memories" -- "$cur"))
@@ -251,7 +251,10 @@ _dk() {
                         'recall:Recall memories by semantic query'
                         'get:Get a memory by ID'
                         'update:Update an existing memory'
-                        'forget:Delete a memory'
+                        'forget:Forget memories by ID, description or request'
+                        'forget-detect:Check messages for requests to forget'
+                        'trash:List restorable deletions'
+                        'restore:Restore a memory from the trash'
                         'search:Search memories with filters'
                         'extract:Extract entities from text'
                         'importance:Update importance score'
@@ -469,7 +472,10 @@ complete -c dk -f -n '__dk_using_subcommand memory' -a 'batch-store' -d 'Store m
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'recall'      -d 'Recall memories by semantic query'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'get'         -d 'Get a memory by ID'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'update'      -d 'Update an existing memory'
-complete -c dk -f -n '__dk_using_subcommand memory' -a 'forget'      -d 'Delete a memory'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'forget'      -d 'Forget memories by ID, description or request'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'forget-detect' -d 'Check messages for requests to forget'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'trash'       -d 'List restorable deletions'
+complete -c dk -f -n '__dk_using_subcommand memory' -a 'restore'     -d 'Restore a memory from the trash'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'search'      -d 'Search memories with filters'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'extract'     -d 'Extract entities from text'
 complete -c dk -f -n '__dk_using_subcommand memory' -a 'importance'  -d 'Update importance score'

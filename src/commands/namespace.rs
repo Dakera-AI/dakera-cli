@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::ArgMatches;
+use dakera_client::reqwest::Method;
 use dakera_client::DakeraClient;
 use serde::Serialize;
 
@@ -137,14 +138,21 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             match sub_matches.subcommand() {
                 Some(("get", get_matches)) => {
                     let ns = get_matches.get_one::<String>("namespace").unwrap();
-                    let path = format!("/v1/namespaces/{}/memory_policy", ns);
-                    let t = ctx.log_request("GET", &path);
-                    let policy = client.get_memory_policy(ns).await;
-                    match &policy {
-                        Ok(_) => ctx.log_response(t, "200 OK"),
-                        Err(_) => ctx.log_response(t, "ERR"),
+                    // Raw request: `stored` (v0.12.4) is newer than the SDK's
+                    // policy type.
+                    let path = format!("/v1/namespaces/{}/memory_policy", api::segment(ns));
+                    let policy = api::request_json_logged(ctx, Method::GET, &path, None).await?;
+                    if api::bool_of(&policy, "stored") == Some(false) {
+                        crate::commands::memory::note(
+                            ctx.format,
+                            &format!(
+                                "namespace '{ns}' has no stored policy: this is what its memories \
+                                 get (no TTL by type, the server's decay curve). `dk namespace \
+                                 policy set` stores one, starting from these values"
+                            ),
+                        );
                     }
-                    output::print_item(&policy?, ctx.format);
+                    output::print_item(&policy, ctx.format);
                 }
 
                 Some(("set", set_matches)) => {

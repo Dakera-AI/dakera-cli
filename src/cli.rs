@@ -557,10 +557,10 @@ pub fn build_namespace_command() -> Command {
                     Command::new("set")
                         .about("Update memory policy fields for a namespace (only supplied flags are changed)")
                         .arg(Arg::new("namespace").required(true).help("Namespace name"))
-                        .arg(Arg::new("working-ttl").long("working-ttl").value_parser(value_parser!(u64)).help("TTL for working memories in seconds (default: 14400 = 4h)"))
-                        .arg(Arg::new("episodic-ttl").long("episodic-ttl").value_parser(value_parser!(u64)).help("TTL for episodic memories in seconds (default: 2592000 = 30d)"))
-                        .arg(Arg::new("semantic-ttl").long("semantic-ttl").value_parser(value_parser!(u64)).help("TTL for semantic memories in seconds (default: 31536000 = 365d)"))
-                        .arg(Arg::new("procedural-ttl").long("procedural-ttl").value_parser(value_parser!(u64)).help("TTL for procedural memories in seconds (default: 63072000 = 730d)"))
+                        .arg(Arg::new("working-ttl").long("working-ttl").value_parser(value_parser!(u64)).help("TTL in seconds for working memories stored without one (default: none, they never expire by type)"))
+                        .arg(Arg::new("episodic-ttl").long("episodic-ttl").value_parser(value_parser!(u64)).help("TTL in seconds for episodic memories stored without one (default: none, they never expire by type)"))
+                        .arg(Arg::new("semantic-ttl").long("semantic-ttl").value_parser(value_parser!(u64)).help("TTL in seconds for semantic memories stored without one (default: none, they never expire by type)"))
+                        .arg(Arg::new("procedural-ttl").long("procedural-ttl").value_parser(value_parser!(u64)).help("TTL in seconds for procedural memories stored without one (default: none, they never expire by type)"))
                         .arg(Arg::new("working-decay").long("working-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for working memories"))
                         .arg(Arg::new("episodic-decay").long("episodic-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for episodic memories"))
                         .arg(Arg::new("semantic-decay").long("semantic-decay").value_parser(["exponential", "power_law", "logarithmic", "flat"]).help("Decay curve for semantic memories"))
@@ -727,13 +727,34 @@ pub fn build_memory_command() -> Command {
                             "Let session summaries be recalled (=false keeps them out); \
                              default: the server's choice",
                         ),
+                )
+                .arg(
+                    Arg::new("include-associated")
+                        .long("include-associated")
+                        .value_name("BOOL")
+                        .num_args(0..=1)
+                        .require_equals(true)
+                        .default_missing_value("true")
+                        .value_parser(value_parser!(bool))
+                        .help(
+                            "List the knowledge-graph neighbours of the results in their own \
+                             Associated section (=false leaves them out); default: the server's \
+                             choice, on since v0.12.4",
+                        ),
                 ),
         )
         .subcommand(
             Command::new("get")
                 .about("Get a specific memory by ID")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
-                .arg(Arg::new("memory_id").required(true).help("Memory ID")),
+                .arg(Arg::new("memory_id").required(true).help("Memory ID"))
+                .arg(
+                    Arg::new("projection-days")
+                        .long("projection-days")
+                        .value_name("DAYS")
+                        .value_parser(value_parser!(u32).range(1..=365))
+                        .help("Also show the memory's importance for each of the next DAYS days if nothing touches it (1-365; server v0.12.4)"),
+                ),
         )
         .subcommand(
             Command::new("update")
@@ -757,15 +778,18 @@ pub fn build_memory_command() -> Command {
                     "Language of the memory's content (a change re-derives the text-based data)",
                 )),
         )
+        .subcommand(build_memory_forget_command())
+        .subcommand(build_memory_forget_detect_command())
         .subcommand(
-            Command::new("forget")
-                .about("Delete a memory")
+            Command::new("trash")
+                .about("List an agent's restorable deletions: memories forgotten with --restorable, deduplicated or consolidated (server v0.12.3; forgotten ones v0.12.4)")
+                .arg(Arg::new("agent_id").required(true).help("Agent ID")),
+        )
+        .subcommand(
+            Command::new("restore")
+                .about("Put back a memory from the agent's trash, exactly as it was stored (server v0.12.3)")
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
-                .arg(
-                    Arg::new("memory_id")
-                        .required(true)
-                        .help("Memory ID to delete"),
-                ),
+                .arg(Arg::new("memory_id").required(true).help("Memory ID (from dk memory trash)")),
         )
         .subcommand(
             Command::new("search")
@@ -834,27 +858,47 @@ pub fn build_memory_command() -> Command {
         )
         .subcommand(
             Command::new("consolidate")
-                .about("Consolidate similar memories")
+                .about("Merge memories into one consolidated memory (the sources are deleted, restorable for a while: dk memory trash)")
+                .after_help(
+                    "Without --ids the server picks the most important memory that has \
+                     neighbours at cosine similarity >= --threshold (same type; same session \
+                     unless cross-session consolidation is configured) and merges it with up to 4 \
+                     of them; it answers 400 when no memories are that similar.\n\nThe server has \
+                     no preview of a consolidation: there is no --dry-run.\n\nExamples:\n  dk memory consolidate my-agent --ids m1,m2,m3\n  dk memory consolidate my-agent --threshold 0.9",
+                )
                 .arg(Arg::new("agent_id").required(true).help("Agent ID"))
                 .arg(
-                    Arg::new("type")
-                        .short('t')
-                        .long("type")
-                        .value_parser(["episodic", "semantic", "procedural", "working"])
-                        .help("Filter by memory type"),
+                    Arg::new("ids")
+                        .long("ids")
+                        .value_delimiter(',')
+                        .help("Comma-separated memory IDs to merge (default: the server picks similar memories)"),
                 )
                 .arg(
                     Arg::new("threshold")
                         .long("threshold")
-                        .default_value("0.8")
-                        .value_parser(value_parser!(f32))
-                        .help("Similarity threshold for consolidation"),
+                        .value_parser(value_parser!(f64))
+                        .conflicts_with("ids")
+                        .help("Cosine similarity a neighbour needs when the server picks the memories, in (0, 1] (server default 0.85)"),
+                )
+                .arg(
+                    Arg::new("target-type")
+                        .long("target-type")
+                        .value_parser(["episodic", "semantic", "procedural", "working"])
+                        .help("Memory type of the consolidated memory"),
+                )
+                .arg(
+                    Arg::new("type")
+                        .short('t')
+                        .long("type")
+                        .hide(true)
+                        .help("Removed: the server never filtered by it"),
                 )
                 .arg(
                     Arg::new("dry-run")
                         .long("dry-run")
+                        .hide(true)
                         .action(ArgAction::SetTrue)
-                        .help("Preview consolidation without applying changes"),
+                        .help("Removed: the server has no consolidation preview"),
                 ),
         )
         .subcommand(
@@ -974,6 +1018,92 @@ fn memory_lang_arg(help: &'static str) -> Arg {
     ))
 }
 
+fn build_memory_forget_command() -> Command {
+    Command::new("forget")
+        .about("Forget memories: by ID, by what they are about (--about) or by a user's request to forget (--request)")
+        .after_help(
+            "--about takes what was said, not the request to forget it (\"I love sushi\", not \
+             \"Please forget that I love sushi\"). --request takes the user's message as said, in \
+             any language; the server checks that it is a request to forget and forgets what it \
+             means (nothing when it is not one). Both need server v0.12.4, and are refused (503) \
+             while its relevance model is not loaded.\n\nExamples:\n  dk memory forget my-agent 6f1c2a\n  dk memory forget my-agent --about 'my home address' --dry-run\n  dk memory forget my-agent --request 'Please forget what I told you about my ex' --restorable\n  dk memory forget my-agent --request \"Oublie ce que je t'ai dit sur mon travail\" --until 1767225600",
+        )
+        .arg(Arg::new("agent_id").required(true).help("Agent ID"))
+        .arg(
+            Arg::new("memory_id")
+                .num_args(0..)
+                .help("Memory IDs to forget (with --about / --request: only those of them that match)"),
+        )
+        .arg(
+            Arg::new("about")
+                .long("about")
+                .value_name("TEXT")
+                .conflicts_with("request")
+                .help("Forget the memories that say this (scored by the server's relevance model; server v0.12.4)"),
+        )
+        .arg(
+            Arg::new("request")
+                .long("request")
+                .value_name("MESSAGE")
+                .help("A user's request to forget, as said, in any language: forget what it means (server v0.12.4)"),
+        )
+        .group(clap::ArgGroup::new("described").args(["about", "request"]))
+        .arg(
+            Arg::new("until")
+                .long("until")
+                .value_name("UNIX_SECS")
+                .value_parser(value_parser!(u64))
+                .requires("described")
+                .help("With --about / --request: only memories stored at or before this time (Unix seconds), so what was said after the request is kept"),
+        )
+        .arg(
+            Arg::new("min-score")
+                .long("min-score")
+                .value_name("SCORE")
+                .value_parser(value_parser!(f64))
+                .requires("about")
+                .help("With --about: the least relevance (0-1) a memory needs to be forgotten (server default 0.5)"),
+        )
+        .arg(
+            Arg::new("limit")
+                .long("limit")
+                .value_parser(value_parser!(usize))
+                .requires("described")
+                .help("With --about / --request: the most memories forgotten (server default 10, at most 50)"),
+        )
+        .arg(
+            Arg::new("restorable")
+                .long("restorable")
+                .action(ArgAction::SetTrue)
+                .help("Keep a copy in the agent's trash for the trash retention (dk memory trash / restore; server v0.12.4)"),
+        )
+        .arg(
+            Arg::new("dry-run")
+                .long("dry-run")
+                .action(ArgAction::SetTrue)
+                .help("List what would be forgotten and forget nothing (server v0.12.4)"),
+        )
+}
+
+fn build_memory_forget_detect_command() -> Command {
+    Command::new("forget-detect")
+        .about("Check which messages ask to forget something said, in any language (POST /v1/memory/forget/detect, server v0.12.4); reads no memory")
+        .after_help(
+            "Forget what a detected request means with dk memory forget <agent> --request \
+             '<message>'.\n\nExamples:\n  dk memory forget-detect 'Please forget my address' 'I always forget my keys'\n  dk memory forget-detect --file messages.txt",
+        )
+        .arg(
+            Arg::new("text")
+                .num_args(0..)
+                .help("Messages to read (at most 64, each at most 8,000 characters)"),
+        )
+        .arg(
+            Arg::new("file")
+                .long("file")
+                .help("Read one message per line from a file ('-' reads stdin)"),
+        )
+}
+
 fn build_memory_batch_store_command() -> Command {
     Command::new("batch-store")
         .about("Store many memories in one request (POST /v1/memories/store/batch, up to 1000)")
@@ -1075,6 +1205,20 @@ pub fn build_session_command() -> Command {
                         .short('s')
                         .long("summary")
                         .help("Session summary text"),
+                )
+                .arg(
+                    Arg::new("auto-summarize")
+                        .long("auto-summarize")
+                        .value_name("BOOL")
+                        .num_args(0..=1)
+                        .require_equals(true)
+                        .default_missing_value("true")
+                        .value_parser(value_parser!(bool))
+                        .help(
+                            "Store the session's summary memory (an extract of its memories) for \
+                             any session with memories (=false: never); default: the server's \
+                             choice, for a session with more than 3 memories",
+                        ),
                 ),
         )
         .subcommand(
