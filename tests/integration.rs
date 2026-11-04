@@ -404,7 +404,7 @@ fn memory_forget_success_reports_deleted_count() {
     ])
     .assert()
     .success()
-    .stdout(predicate::str::contains("Deleted 1 memory"));
+    .stdout(predicate::str::contains("Forgot 1 memory of 'test-agent'"));
 }
 
 // ---------------------------------------------------------------------------
@@ -506,17 +506,11 @@ fn memory_update_success_reports_memory_id() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn memory_consolidate_dry_run_shows_preview() {
+fn memory_consolidate_refuses_dry_run_the_server_never_had() {
     let server = MockServer::start();
-    server.mock(|when, then| {
+    let m = server.mock(|when, then| {
         when.method(POST).path("/v1/memory/consolidate");
-        then.status(200)
-            .header("Content-Type", "application/json")
-            .json_body(json!({
-                "consolidated_count": 5,
-                "removed_count": 3,
-                "new_memories": []
-            }));
+        then.status(200).json_body(json!({}));
     });
 
     dk().args([
@@ -528,8 +522,38 @@ fn memory_consolidate_dry_run_shows_preview() {
         "--dry-run",
     ])
     .assert()
+    .code(5)
+    .stderr(predicate::str::contains("no consolidation preview"));
+    m.assert_calls(0);
+}
+
+#[test]
+fn memory_consolidate_sends_the_ids_and_reports_the_merge() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/memory/consolidate")
+            .json_body(json!({"agent_id": "test-agent", "memory_ids": ["m1", "m2"]}));
+        then.status(200).json_body(json!({
+            "consolidated_memory": {"id": "m9", "content": "both"},
+            "source_memory_ids": ["m1", "m2"],
+            "memories_removed": 2
+        }));
+    });
+
+    dk().args([
+        "--url",
+        &server.base_url(),
+        "memory",
+        "consolidate",
+        "test-agent",
+        "--ids",
+        "m1,m2",
+    ])
+    .assert()
     .success()
-    .stdout(predicate::str::contains("[dry-run]"));
+    .stdout(predicate::str::contains("Merged 2 memories into 'm9'"));
+    m.assert();
 }
 
 // ---------------------------------------------------------------------------
@@ -1334,7 +1358,7 @@ fn container_memory_forget() {
         .args(["memory", "forget", "integration-agent", id.trim()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Deleted"));
+        .stdout(predicate::str::contains("Forgot 1 memory"));
 }
 
 #[test]
@@ -1432,6 +1456,8 @@ fn container_memory_consolidate() {
             .success();
     }
 
+    // The server has no consolidation preview: `--dry-run` is refused before
+    // anything is sent (it used to be sent, ignored, and the memories merged).
     container_dk(&url, &key)
         .args([
             "memory",
@@ -1440,7 +1466,7 @@ fn container_memory_consolidate() {
             "--dry-run",
         ])
         .assert()
-        .success();
+        .code(5);
 }
 
 #[test]

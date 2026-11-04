@@ -8,6 +8,7 @@ pub mod capabilities;
 pub mod completion;
 pub mod config;
 pub mod document;
+pub mod forget;
 pub mod health;
 pub mod index;
 pub mod init;

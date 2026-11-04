@@ -129,15 +129,25 @@ async fn keys_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value>
     crate::api::request_json(url, Method::POST, path, body).await
 }
 
-async fn keys_delete(url: &str, path: &str) -> Result<Value> {
-    crate::api::request_json(url, Method::DELETE, path, None).await
-}
-
 /// `/admin/keys/{key_id}{suffix}` with the id percent-encoded.
 fn key_path(key_id: &str, suffix: &str) -> String {
     let mut path = format!("/admin/keys/{}", crate::api::segment(key_id));
     path.push_str(suffix);
     path
+}
+
+/// Report a change the server answered: `done` once it is stored (`200`),
+/// or a warning that it applies but is not stored yet (`202`, Dakera v0.12.4:
+/// logged and retried by the server), then the answer.
+pub fn report_change(ctx: &Ctx, status: u16, answer: &Value, done: &str) {
+    match crate::api::pending_write_note(status, answer) {
+        Some(note) => {
+            crate::commands::memory::note(ctx.format, &format!("{done}, not stored yet: {note}"))
+        }
+        None if matches!(ctx.format, OutputFormat::Table) => output::success(done),
+        None => {}
+    }
+    output::print_item(answer, ctx.format);
 }
 
 pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
@@ -205,20 +215,26 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let key_id = sub.get_one::<String>("key_id").unwrap();
             let path = key_path(key_id, "");
             let t = ctx.log_request("DELETE", &path);
-            let result = keys_delete(&ctx.url, &path).await;
-            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
-            output::success(&format!("API key '{}' deleted", key_id));
-            output::print_item(&result?, ctx.format);
+            let result =
+                crate::api::request_json_status(&ctx.url, Method::DELETE, &path, None).await;
+            ctx.log_response(t, if result.is_ok() { "OK" } else { "ERR" });
+            let (status, answer) = result?;
+            report_change(ctx, status, &answer, &format!("API key '{key_id}' deleted"));
         }
 
         Some(("deactivate", sub)) => {
             let key_id = sub.get_one::<String>("key_id").unwrap();
             let path = key_path(key_id, "/deactivate");
             let t = ctx.log_request("POST", &path);
-            let result = keys_post(&ctx.url, &path, None).await;
-            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
-            output::success(&format!("API key '{}' deactivated", key_id));
-            output::print_item(&result?, ctx.format);
+            let result = crate::api::request_json_status(&ctx.url, Method::POST, &path, None).await;
+            ctx.log_response(t, if result.is_ok() { "OK" } else { "ERR" });
+            let (status, answer) = result?;
+            report_change(
+                ctx,
+                status,
+                &answer,
+                &format!("API key '{key_id}' deactivated"),
+            );
         }
 
         Some(("rotate", sub)) => {

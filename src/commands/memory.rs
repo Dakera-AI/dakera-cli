@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::ArgMatches;
 use dakera_client::memory::{
     BatchMemoryFilter, BatchRecallRequest, BatchStoreMemoryItem, BatchStoreMemoryRequest,
-    ConsolidateRequest, MemoryType, RecallRequest, StoreMemoryRequest, UpdateImportanceRequest,
+    MemoryType, RecallRequest, StoreMemoryRequest, UpdateImportanceRequest,
 };
 use dakera_client::reqwest::Method;
 use dakera_client::{DakeraClient, HybridSearchRequest};
@@ -115,6 +115,19 @@ pub struct ContextRow {
     pub document: Option<super::document::Citation>,
 }
 
+/// A memory of a recall answer's `associated_memories` (knowledge-graph
+/// neighbours of the results) or `instructions` (the agent's standing
+/// instructions that fit the query), Dakera v0.12.4.
+#[derive(Debug, Serialize)]
+pub struct ExtraRow {
+    /// Memory id.
+    pub id: String,
+    /// Memory content (stored data, shown as is).
+    pub content: String,
+    /// The score the server gave it (not comparable with the ranked scores).
+    pub score: f32,
+}
+
 /// What `dk memory recall` shows: at most `--top-k` ranked results, and the
 /// neighbourhood context apart from them.
 #[derive(Debug, Serialize)]
@@ -123,6 +136,19 @@ pub struct RecallView {
     pub memories: Vec<RecallRow>,
     /// The neighbourhood context of those results.
     pub context_memories: Vec<ContextRow>,
+    /// Knowledge-graph neighbours of the results (shared entities,
+    /// similarity, explicit links), not ranked: on by default since Dakera
+    /// v0.12.4 (`--include-associated=false` turns them off).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub associated_memories: Vec<ExtraRow>,
+    /// The agent's standing instructions that best fit the query (memories
+    /// tagged `dakera-instruction`, at most 3; Dakera v0.12.4).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<ExtraRow>,
+    /// Parts of the recall the server could not serve, each with why
+    /// (Dakera v0.12.4). Printed as warnings; empty when it is complete.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub degraded: Vec<String>,
     /// Context items an older server appended to `memories` that were left
     /// out (under `--neighborhood separate` / `off`). Not printed in JSON.
     #[serde(skip)]
@@ -137,7 +163,7 @@ pub fn recall_body(
     mode: &str,
     include_summaries: Option<bool>,
 ) -> Result<serde_json::Value> {
-    let mut body = serde_json::to_value(request)?;
+    let mut body = api::body_of(request)?;
     body["neighborhood_mode"] = serde_json::json!(mode);
     if mode == "off" {
         body["neighborhood"] = serde_json::json!(false);
@@ -146,6 +172,33 @@ pub fn recall_body(
         body["include_summaries"] = serde_json::json!(include);
     }
     Ok(body)
+}
+
+/// `--include-associated[=BOOL]`, sent only when given: the server's default
+/// (on since Dakera v0.12.4) applies otherwise.
+pub fn set_include_associated(body: &mut serde_json::Value, include: Option<bool>) {
+    if let Some(include) = include {
+        body["include_associated"] = serde_json::json!(include);
+    }
+}
+
+/// The memories of `answer[key]` (`associated_memories`, `instructions`).
+fn extra_rows(answer: &serde_json::Value, key: &str) -> Result<Vec<ExtraRow>> {
+    let empty = Vec::new();
+    answer
+        .get(key)
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty)
+        .iter()
+        .map(|item| {
+            let m = recalled(item)?;
+            Ok(ExtraRow {
+                id: m.id,
+                content: m.content,
+                score: m.score,
+            })
+        })
+        .collect()
 }
 
 /// One recall result as a row, read with the SDK's result parser (which
@@ -239,9 +292,22 @@ pub fn shape_recall(answer: &serde_json::Value, top_k: usize, mode: &str) -> Res
             document: super::document::citation(item),
         });
     }
+    let degraded = answer
+        .get("degraded")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|d| d.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(RecallView {
         memories,
         context_memories,
+        associated_memories: extra_rows(answer, "associated_memories")?,
+        instructions: extra_rows(answer, "instructions")?,
+        degraded,
         omitted,
     })
 }
@@ -253,6 +319,14 @@ pub fn shape_recall(answer: &serde_json::Value, top_k: usize, mode: &str) -> Res
 /// stdout; the notes go to stderr there.
 pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
     let table = matches!(format, crate::OutputFormat::Table);
+    for part in &view.degraded {
+        let note = format!("the server could not serve part of this recall: {part}");
+        if table {
+            output::warning(&note);
+        } else {
+            eprintln!("warning: {note}");
+        }
+    }
     if view.omitted > 0 {
         let note = format!(
             "{} neighbourhood context item(s) left out: this server predates neighborhood_mode \
@@ -297,6 +371,18 @@ pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
             .collect();
         output::print_data(&rows, format);
     }
+    print_extras(
+        &view.instructions,
+        "Standing instructions: rules the user set earlier that fit this query (memories tagged \
+         dakera-instruction)",
+        format,
+    );
+    print_extras(
+        &view.associated_memories,
+        "Associated: knowledge-graph neighbours of the results (not ranked, not counted in \
+         --top-k)",
+        format,
+    );
     if view.context_memories.is_empty() {
         return;
     }
@@ -329,6 +415,83 @@ pub fn print_recall(view: &RecallView, format: crate::OutputFormat) {
         })
         .collect();
     output::print_data(&rows, format);
+}
+
+/// A titled section of extra recall memories (table output only).
+fn print_extras(rows: &[ExtraRow], title: &str, format: crate::OutputFormat) {
+    if rows.is_empty() {
+        return;
+    }
+    println!();
+    output::info(&format!("{title}: {}", rows.len()));
+    output::print_data(rows, format);
+}
+
+/// Tell the user something about a successful answer without breaking JSON
+/// output: a warning line in the table output, `warning: ...` on stderr
+/// otherwise.
+pub fn note(format: crate::OutputFormat, message: &str) {
+    if matches!(format, crate::OutputFormat::Table) {
+        output::warning(message);
+    } else {
+        eprintln!("warning: {message}");
+    }
+}
+
+/// What to say about a stored text the server read as a request to forget
+/// (`forget_request`, Dakera v0.12.4): how to act on it.
+pub fn forget_request_note(agent_id: &str, intent: &serde_json::Value) -> Option<String> {
+    if !api::bool_of(intent, "is_request").unwrap_or(false) {
+        return None;
+    }
+    let probability = intent
+        .get("probability")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(f64::NAN);
+    Some(format!(
+        "this text reads as a request to forget something said (probability {probability:.2}). \
+         To forget what it means: dk memory forget {agent_id} --request '<the text>' (unless the \
+         server runs DAKERA_FORGET_REQUESTS=apply, which does it itself, restorably)"
+    ))
+}
+
+/// The body of `POST /v1/memory/consolidate` from `dk memory consolidate`'s
+/// arguments: the server reads `memory_ids`, `threshold` and `target_type`
+/// only. `--type` and `--dry-run` were sent before 0.8.3 and the server
+/// ignored them: a "dry run" merged.
+pub fn consolidate_body(agent_id: &str, sub: &ArgMatches) -> Result<serde_json::Value> {
+    if sub.get_flag("dry-run") {
+        return Err(input_error(
+            "the server has no consolidation preview, so --dry-run is refused (before dk 0.8.3 \
+             it was sent, ignored by the server, and the memories were merged). Use --ids to \
+             choose the memories to merge",
+        ));
+    }
+    if sub.get_one::<String>("type").is_some() {
+        return Err(input_error(
+            "--type is refused: the server never filtered consolidation by type (it merges \
+             memories of one type); --target-type sets the consolidated memory's type",
+        ));
+    }
+    let mut body = serde_json::json!({ "agent_id": agent_id });
+    if let Some(ids) = sub.get_many::<String>("ids") {
+        let ids: Vec<&str> = ids.map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        if !ids.is_empty() {
+            body["memory_ids"] = serde_json::json!(ids);
+        }
+    }
+    if let Some(threshold) = sub.get_one::<f64>("threshold") {
+        if !(*threshold > 0.0 && *threshold <= 1.0) {
+            return Err(input_error(format!(
+                "--threshold is a cosine similarity in (0, 1], got {threshold}"
+            )));
+        }
+        body["threshold"] = serde_json::json!(threshold);
+    }
+    if let Some(t) = sub.get_one::<String>("target-type") {
+        body["target_type"] = serde_json::json!(t);
+    }
+    Ok(body)
 }
 
 fn memory_type_to_string(mt: &MemoryType) -> String {
@@ -443,6 +606,117 @@ fn batch_forget_filter(sub: &ArgMatches) -> serde_json::Value {
     filter
 }
 
+/// The stored memories of a batch store answer.
+fn stored_rows(answer: &serde_json::Value) -> Vec<StoredRow> {
+    answer
+        .get("stored")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .map(|m| StoredRow {
+            id: api::str_of(m, "id").unwrap_or("").to_string(),
+            content: api::str_of(m, "content").unwrap_or("").to_string(),
+            importance: m.get("importance").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+        })
+        .collect()
+}
+
+/// What to say about a batch store answer (Dakera v0.12.4): items not stored
+/// as near-duplicates (`duplicates`, under the namespace's `dedup_on_store`)
+/// and stored texts that read as requests to forget (`forget_requests`).
+pub fn batch_store_notes(agent_id: &str, answer: &serde_json::Value) -> Vec<String> {
+    let mut notes = Vec::new();
+    let empty = Vec::new();
+    let list = |key: &str| {
+        answer
+            .get(key)
+            .and_then(|v| v.as_array())
+            .unwrap_or(&empty)
+            .clone()
+    };
+    let duplicates = list("duplicates");
+    if !duplicates.is_empty() {
+        let items: Vec<String> = duplicates
+            .iter()
+            .map(|d| {
+                format!(
+                    "#{} = {}",
+                    api::u64_of(d, "index")
+                        .map(|i| i.to_string())
+                        .unwrap_or_default(),
+                    api::str_of(d, "existing_id").unwrap_or("?")
+                )
+            })
+            .collect();
+        notes.push(format!(
+            "{} item(s) not stored: the namespace deduplicates on store and each is a \
+             near-duplicate of a stored memory (item = existing id): {}",
+            duplicates.len(),
+            items.join(", ")
+        ));
+    }
+    let requests = list("forget_requests");
+    let ids: Vec<&str> = requests
+        .iter()
+        .filter(|r| api::bool_of(r, "is_request").unwrap_or(true))
+        .filter_map(|r| api::str_of(r, "id"))
+        .collect();
+    if !ids.is_empty() {
+        notes.push(format!(
+            "{} stored memory(ies) read as a request to forget something said ({}). To forget \
+             what one means: dk memory forget {agent_id} --request '<its text>' (unless the \
+             server runs DAKERA_FORGET_REQUESTS=apply, which does it itself)",
+            ids.len(),
+            ids.join(", ")
+        ));
+    }
+    notes
+}
+
+/// The entities of a `POST /v1/memories/extract` answer.
+fn entity_rows(answer: &serde_json::Value) -> Vec<EntityRow> {
+    answer
+        .get("entities")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .map(|e| EntityRow {
+            entity_type: api::str_of(e, "entity_type").unwrap_or("").to_string(),
+            value: api::str_of(e, "value").unwrap_or("").to_string(),
+            score: e.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        })
+        .collect()
+}
+
+/// `dk memory get --projection-days`: the memory, then its projected
+/// importance per day (table), or the whole answer (JSON).
+fn print_projection(answer: &serde_json::Value, format: crate::OutputFormat) {
+    if !matches!(format, crate::OutputFormat::Table) {
+        output::print_item(answer, format);
+        return;
+    }
+    let mut memory = answer.clone();
+    let projection = memory
+        .as_object_mut()
+        .and_then(|m| m.remove("strength_projection"))
+        .unwrap_or(serde_json::Value::Null);
+    output::print_item(&memory, format);
+    let points: Vec<serde_json::Value> = projection
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| serde_json::json!({ "day": p.get("day"), "importance": p.get("importance") }))
+        .collect();
+    if points.is_empty() {
+        output::info("The server sent no strength projection (it needs v0.12.4)");
+        return;
+    }
+    println!();
+    output::info("Projected importance if nothing touches the memory (day 0 = today)");
+    output::print_data(&points, format);
+}
+
 pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
     let client = DakeraClient::new(&ctx.url)?;
 
@@ -471,20 +745,38 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 request = request.with_attachment_ref(reference);
             }
 
-            let t = ctx.log_request("POST", "/v1/memory/store");
-            let response = client.store_memory(request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            let response = response?;
+            // Raw request: the answer's `forget_request` (v0.12.4) and
+            // `session_state` are newer than the SDK's store response.
+            let body = api::body_of(&request)?;
+            let answer =
+                api::request_json_logged(ctx, Method::POST, "/v1/memory/store", Some(&body))
+                    .await?;
+            let id = answer
+                .pointer("/memory/id")
+                .or_else(|| answer.get("memory_id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
 
-            // The store answer carries no namespace (the SDK's `namespace` is a
-            // placeholder); the memory lives in the agent's memory namespace.
-            output::success(&format!(
-                "Memory stored (id: {}, agent: {agent_id})",
-                response.memory_id
-            ));
+            // The store answer carries no namespace; the memory lives in the
+            // agent's memory namespace.
+            if matches!(ctx.format, crate::OutputFormat::Table) {
+                output::success(&format!("Memory stored (id: {id}, agent: {agent_id})"));
+            } else {
+                output::print_item(&answer, ctx.format);
+            }
+            if api::str_of(&answer, "session_state") == Some("ended") {
+                note(
+                    ctx.format,
+                    "the session has ended (the memory was stored all the same); start a new \
+                     session for what follows",
+                );
+            }
+            if let Some(text) = answer
+                .get("forget_request")
+                .and_then(|i| forget_request_note(agent_id, i))
+            {
+                note(ctx.format, &text);
+            }
         }
 
         Some(("recall", sub_matches)) => {
@@ -504,7 +796,11 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 .map(String::as_str)
                 .unwrap_or("separate");
             let include_summaries = sub_matches.get_one::<bool>("include-summaries").copied();
-            let body = recall_body(&request, mode, include_summaries)?;
+            let mut body = recall_body(&request, mode, include_summaries)?;
+            set_include_associated(
+                &mut body,
+                sub_matches.get_one::<bool>("include-associated").copied(),
+            );
 
             // Raw request: the `neighborhood_mode` / `include_summaries` fields
             // and the `context_memories` / `matched_text` answer fields are newer
@@ -520,6 +816,16 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
             let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
 
+            if let Some(days) = sub_matches.get_one::<u32>("projection-days") {
+                let path = format!(
+                    "/v1/memory/get/{}?agent_id={}&projection_days={days}",
+                    api::segment(memory_id),
+                    api::segment(agent_id)
+                );
+                let answer = api::request_json_logged(ctx, Method::GET, &path, None).await?;
+                print_projection(&answer, ctx.format);
+                return Ok(());
+            }
             let t = ctx.log_request("GET", &format!("/v1/memory/get/{}", memory_id));
             let memory = client.get_memory(agent_id, memory_id).await;
             match &memory {
@@ -549,26 +855,8 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             output::success(&format!("Memory '{id}' updated"));
         }
 
-        Some(("forget", sub_matches)) => {
-            let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
-            let memory_id = sub_matches.get_one::<String>("memory_id").unwrap();
-
-            let request = dakera_client::memory::ForgetRequest::by_ids(
-                agent_id.clone(),
-                vec![memory_id.clone()],
-            );
-            let t = ctx.log_request("POST", "/v1/memory/forget");
-            let response = client.forget(request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            let response = response?;
-
-            output::success(&format!(
-                "Deleted {} memory (id: {})",
-                response.deleted_count, memory_id
-            ));
+        Some((name @ ("forget" | "forget-detect" | "trash" | "restore"), sub_matches)) => {
+            super::forget::execute(ctx, name, sub_matches).await?;
         }
 
         Some(("search", sub_matches)) => {
@@ -633,28 +921,24 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
             let mut request = BatchStoreMemoryRequest::new(agent_id.clone(), items);
             request.lang = sub_matches.get_one::<String>("lang").cloned();
 
-            let t = ctx.log_request("POST", "/v1/memories/store/batch");
-            let response = client.store_memories_batch(request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
+            // Raw request: `duplicates` and `forget_requests` (v0.12.4) are
+            // newer than the SDK's batch response.
+            let body = api::body_of(&request)?;
+            let path = "/v1/memories/store/batch";
+            let answer = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+            let table = matches!(ctx.format, crate::OutputFormat::Table);
+            if table {
+                output::success(&format!(
+                    "Stored {} memories (embedding: {} ms)",
+                    api::u64_of(&answer, "stored_count").unwrap_or(0),
+                    api::u64_of(&answer, "total_embedding_time_ms").unwrap_or(0)
+                ));
             }
-            let response = response?;
-
-            output::success(&format!(
-                "Stored {} memories (embedding: {} ms)",
-                response.stored_count, response.total_embedding_time_ms
-            ));
-            let rows: Vec<StoredRow> = response
-                .stored
-                .into_iter()
-                .map(|m| StoredRow {
-                    id: m.id,
-                    content: m.content,
-                    importance: m.importance,
-                })
-                .collect();
+            let rows = stored_rows(&answer);
             output::print_data(&rows, ctx.format);
+            for text in batch_store_notes(agent_id, &answer) {
+                note(ctx.format, &text);
+            }
         }
 
         Some(("extract", sub_matches)) => {
@@ -667,29 +951,38 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
                 });
             let lang = sub_matches.get_one::<String>("lang").map(String::as_str);
 
-            let t = ctx.log_request("POST", "/v1/memories/extract");
-            let response = client
-                .extract_entities_with_lang(text, entity_types, lang)
-                .await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
+            // Raw request: the answer's `extractor` and `warnings` (v0.12.4)
+            // are newer than the SDK's extract response.
+            let mut body = serde_json::json!({ "content": text });
+            if let Some(types) = entity_types {
+                body["entity_types"] = serde_json::json!(types);
             }
-            let response = response?;
-
-            if response.entities.is_empty() {
+            if let Some(lang) = lang {
+                body["lang"] = serde_json::json!(lang);
+            }
+            let path = "/v1/memories/extract";
+            let answer = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+            for warning in answer
+                .get("warnings")
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|w| w.as_str())
+            {
+                note(ctx.format, warning);
+            }
+            let rows = entity_rows(&answer);
+            if rows.is_empty() {
                 output::info("No entities found");
             } else {
-                output::info(&format!("Found {} entities", response.entities.len()));
-                let rows: Vec<EntityRow> = response
-                    .entities
-                    .into_iter()
-                    .map(|e| EntityRow {
-                        entity_type: e.entity_type,
-                        value: e.value,
-                        score: e.score,
-                    })
-                    .collect();
+                if matches!(ctx.format, crate::OutputFormat::Table) {
+                    let by = match api::str_of(&answer, "extractor") {
+                        Some("gliner") => " (GLiNER model and rules)",
+                        Some("rule_based") => " (rules only: dates, URLs, emails, ...)",
+                        _ => "",
+                    };
+                    output::info(&format!("Found {} entities{by}", rows.len()));
+                }
                 output::print_data(&rows, ctx.format);
             }
         }
@@ -721,38 +1014,26 @@ pub async fn execute(ctx: &Context, matches: &ArgMatches) -> Result<()> {
 
         Some(("consolidate", sub_matches)) => {
             let agent_id = sub_matches.get_one::<String>("agent_id").unwrap();
-            let memory_type = sub_matches.get_one::<String>("type").cloned();
-            let threshold = sub_matches.get_one::<f32>("threshold").copied();
-            let dry_run = sub_matches.get_flag("dry-run");
-
-            let request = ConsolidateRequest {
-                memory_type,
-                threshold,
-                dry_run,
-                ..Default::default()
-            };
-
-            let t = ctx.log_request("POST", "/v1/memory/consolidate");
-            let response = client.consolidate(agent_id, request).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
-            }
-            let response = response?;
-
-            if dry_run {
-                output::info(&format!(
-                    "[dry-run] Would consolidate {} memories, removing {}",
-                    response.consolidated_count, response.removed_count
-                ));
-            } else {
+            let body = consolidate_body(agent_id, sub_matches)?;
+            let path = "/v1/memory/consolidate";
+            let answer = api::request_json_logged(ctx, Method::POST, path, Some(&body)).await?;
+            if matches!(ctx.format, crate::OutputFormat::Table) {
+                let sources = answer
+                    .get("source_memory_ids")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                let merged_into = answer
+                    .pointer("/consolidated_memory/id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
                 output::success(&format!(
-                    "Consolidated {} memories, removed {} duplicates, created {} new memories",
-                    response.consolidated_count,
-                    response.removed_count,
-                    response.new_memories.len()
+                    "Merged {sources} memories into '{merged_into}' ({} removed; `dk memory trash \
+                     {agent_id}` lists them while they can be restored)",
+                    api::u64_of(&answer, "memories_removed").unwrap_or(0)
                 ));
             }
+            output::print_item(&answer, ctx.format);
         }
 
         Some(("feedback", sub_matches)) => {

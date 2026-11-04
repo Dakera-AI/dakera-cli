@@ -37,6 +37,19 @@ pub struct SessionMemoryRow {
     pub truncated: Option<bool>,
 }
 
+/// The body of `POST /v1/sessions/{id}/end`: the summary and
+/// `auto_summarize` (honoured since Dakera v0.12.4), each sent only when given.
+pub fn end_body(summary: Option<&str>, auto_summarize: Option<bool>) -> serde_json::Value {
+    let mut body = serde_json::json!({});
+    if let Some(summary) = summary {
+        body["summary"] = serde_json::json!(summary);
+    }
+    if let Some(auto) = auto_summarize {
+        body["auto_summarize"] = serde_json::json!(auto);
+    }
+    body
+}
+
 pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
     let client = DakeraClient::new(&ctx.url)?;
 
@@ -108,18 +121,34 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
         Some(("end", sub_matches)) => {
             let session_id = sub_matches.get_one::<String>("session_id").unwrap();
-            let summary = sub_matches.get_one::<String>("summary").cloned();
-
-            let t = ctx.log_request("POST", &format!("/v1/sessions/{}/end", session_id));
-            let response = client.end_session(session_id, summary).await;
-            match &response {
-                Ok(_) => ctx.log_response(t, "200 OK"),
-                Err(_) => ctx.log_response(t, "ERR"),
+            let body = end_body(
+                sub_matches.get_one::<String>("summary").map(String::as_str),
+                sub_matches.get_one::<bool>("auto-summarize").copied(),
+            );
+            // Raw request: `auto_summarize` and the answer's `summary_pending`
+            // (v0.12.4) are newer than the SDK's session types.
+            let path = format!("/v1/sessions/{}/end", crate::api::segment(session_id));
+            let answer = crate::api::request_json_logged(
+                ctx,
+                dakera_client::reqwest::Method::POST,
+                &path,
+                Some(&body),
+            )
+            .await?;
+            let ended = crate::api::ptr_str(&answer, "/session/id").unwrap_or(session_id);
+            if matches!(ctx.format, crate::OutputFormat::Table) {
+                output::success(&format!("Session '{ended}' ended"));
             }
-            let response = response?;
-
-            output::success(&format!("Session '{}' ended", response.session.id));
-            output::print_item(&response, ctx.format);
+            output::print_item(&answer, ctx.format);
+            if let Some(why) = crate::api::str_of(&answer, "summary_pending") {
+                super::memory::note(
+                    ctx.format,
+                    &format!(
+                        "the session's summary memory is not stored yet ({why}); the server \
+                         retries until it is, after a restart too"
+                    ),
+                );
+            }
         }
 
         Some(("get", sub_matches)) => {
@@ -266,6 +295,7 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::end_body;
     use crate::cli::build_session_command;
 
     #[test]
@@ -286,6 +316,25 @@ mod tests {
                 .is_err(),
             "session end without session_id should fail"
         );
+    }
+
+    #[test]
+    fn session_end_sends_auto_summarize_only_when_given() {
+        let m = build_session_command()
+            .try_get_matches_from(["session", "end", "s1", "--auto-summarize=false"])
+            .unwrap();
+        let sub = m.subcommand_matches("end").unwrap();
+        assert_eq!(sub.get_one::<bool>("auto-summarize"), Some(&false));
+        assert_eq!(
+            end_body(Some("done"), Some(false)),
+            serde_json::json!({"summary": "done", "auto_summarize": false})
+        );
+        assert_eq!(end_body(None, None), serde_json::json!({}));
+        let m = build_session_command()
+            .try_get_matches_from(["session", "end", "s1", "--auto-summarize"])
+            .unwrap();
+        let sub = m.subcommand_matches("end").unwrap();
+        assert_eq!(sub.get_one::<bool>("auto-summarize"), Some(&true));
     }
 
     #[test]

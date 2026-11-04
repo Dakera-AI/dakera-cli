@@ -17,10 +17,6 @@ async fn admin_post(url: &str, path: &str, body: Option<&Value>) -> Result<Value
     crate::api::request_json(url, Method::POST, path, body).await
 }
 
-async fn admin_delete(url: &str, path: &str) -> Result<Value> {
-    crate::api::request_json(url, Method::DELETE, path, None).await
-}
-
 async fn admin_put(url: &str, path: &str, body: &Value) -> Result<Value> {
     crate::api::request_json(url, Method::PUT, path, Some(body)).await
 }
@@ -173,11 +169,11 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let body = quota_request_body(parsed);
             let path = quota_path(sub.get_one::<String>("namespace"));
             let t = ctx.log_request("PUT", &path);
-            let result = admin_put(&ctx.url, &path, &body).await;
-            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
-            let result = result?;
-            output::success("Quotas updated");
-            output::print_item(&result, ctx.format);
+            let result =
+                crate::api::request_json_status(&ctx.url, Method::PUT, &path, Some(&body)).await;
+            ctx.log_response(t, if result.is_ok() { "OK" } else { "ERR" });
+            let (status, answer) = result?;
+            super::keys::report_change(ctx, status, &answer, "Quotas updated");
         }
 
         Some(("slow-queries", sub)) => {
@@ -225,11 +221,16 @@ pub async fn execute(ctx: &Ctx, matches: &ArgMatches) -> Result<()> {
             let backup_id = sub.get_one::<String>("backup_id").unwrap();
             let path = format!("/admin/backups/{}", crate::api::segment(backup_id));
             let t = ctx.log_request("DELETE", &path);
-            let result = admin_delete(&ctx.url, &path).await;
-            ctx.log_response(t, if result.is_ok() { "200 OK" } else { "ERR" });
-            let result = result?;
-            output::success(&format!("Backup '{}' deleted", backup_id));
-            output::print_item(&result, ctx.format);
+            let result =
+                crate::api::request_json_status(&ctx.url, Method::DELETE, &path, None).await;
+            ctx.log_response(t, if result.is_ok() { "OK" } else { "ERR" });
+            let (status, answer) = result?;
+            super::keys::report_change(
+                ctx,
+                status,
+                &answer,
+                &format!("Backup '{backup_id}' deleted"),
+            );
         }
 
         _ => {

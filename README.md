@@ -317,8 +317,17 @@ dk memory batch-store my-agent --file memories.json --lang de
 # Extract entities from text without storing it
 dk memory extract "Anna met Bob in Paris" --entity-types person,location
 
-# Delete a single memory
-dk memory forget my-agent mem-abc123
+# Forget memories by ID
+dk memory forget my-agent mem-abc123 mem-def456
+
+# Forget by what was said, or by a user's request to forget, in any language (server v0.12.4)
+dk memory forget my-agent --about "my home address" --dry-run
+dk memory forget my-agent --request "Please forget what I told you about my ex" --restorable
+dk memory forget-detect "Oublie mon adresse" "I always forget my keys"
+
+# Restorable deletions: list, and put one back
+dk memory trash my-agent
+dk memory restore my-agent mem-abc123
 
 # Batch delete by filters (dry-run first!)
 dk memory batch-forget my-agent --min-importance 0.3 --dry-run
@@ -327,8 +336,12 @@ dk memory batch-forget my-agent --min-importance 0.3 --max-age-days 90
 # Update importance scores
 dk memory importance my-agent --ids mem-1,mem-2 --value 0.9
 
-# Consolidate similar memories into summaries
-dk memory consolidate my-agent --dry-run
+# Merge memories into one (without --ids the server picks similar ones; no preview)
+dk memory consolidate my-agent --ids mem-1,mem-2,mem-3
+dk memory consolidate my-agent --threshold 0.9
+
+# A memory's projected importance for the next 30 days (server v0.12.4)
+dk memory get my-agent mem-abc123 --projection-days 30
 
 # Submit recall quality feedback (upvote, downvote, flag)
 dk memory feedback my-agent mem-abc123 upvote
@@ -359,6 +372,7 @@ dk session start my-agent
 dk session start my-agent --idle-timeout 8h   # v0.12.2: own inactivity timeout (0 = never)
 dk session touch sess-abc123                  # v0.12.2: keep a quiet session open
 dk session end sess-abc123
+dk session end sess-abc123 --auto-summarize   # v0.12.4: summary memory for any session with memories
 dk session list --agent-id my-agent --active-only
 dk session get sess-abc123
 dk session memories sess-abc123 --preview 200 --limit 20
@@ -544,6 +558,27 @@ dk completion powershell
 ---
 
 ## Dakera v0.12 and compatibility
+
+`dk` 0.8.3 supports Dakera **v0.12.4** and works against v0.11.108 and v0.12.0 – v0.12.3 as
+before. What 0.8.3 adds needs a v0.12.4 server, as noted:
+
+| Command (0.8.3) | v0.12.3 and older | v0.12.4 |
+|---|---|---|
+| `dk memory forget --about / --request / --dry-run / --restorable` | refused by `dk` before sending (the server would ignore them and delete) | yes; `--about` / `--request` answer `503` while the server's relevance model is not loaded |
+| `dk memory forget-detect` | no route | yes |
+| `dk memory trash`, `dk memory restore` | v0.12.3 (deduplicated and consolidated memories) | also memories forgotten with `--restorable` |
+| `dk memory recall`: Standing instructions, Associated, `degraded` warnings | not sent (associated memories only with `--include-associated`) | instructions when the agent has some; associated memories by default |
+| `dk memory get --projection-days` | ignored | yes |
+| `dk session end --auto-summarize` | ignored | yes; a summary not stored yet is reported |
+| `dk memory store` / `batch-store` notes (requests to forget, near-duplicates) | never shown | when the server reports them |
+| `dk keys delete|deactivate`, `dk admin quotas-set|backup-delete` | `200` | `202` when the change applies but is not stored yet: `dk` says so |
+
+Since v0.12.4 the server tags stored memories with people, organisations and locations by
+default (`DAKERA_DEFAULT_ENTITY_TYPES`), with a GLiNER model chosen by the embedding model's
+languages (`gliner-bi-small` for English, `gliner-x-small` for about 100 languages; an operator
+can set `DAKERA_GLINER_MODEL` to another model of the same languages: `gliner-bi-edge` or
+`gliner-medium` for English, `gliner-multi` multilingual). The tags are added in the background after the
+store answers. `dk memory extract` says whether the model or only the rules ran.
 
 > **Breaking in dk 0.8.2:** `dk --format json|compact memory recall` prints one object,
 > `{"memories": [...], "context_memories": [...]}`, instead of an array of rows: read the ranked

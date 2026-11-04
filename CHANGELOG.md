@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - Unreleased
+
+Support for Dakera server **v0.12.4**, with `dakera-client` 0.12.3. Works against v0.11.108 and
+v0.12.0 – v0.12.3 servers as before; the forget options, `forget-detect` and `--projection-days`
+need v0.12.4, and `dk` refuses the forget options on an older server before sending anything
+(an older server would ignore `--dry-run` or `--restorable` and delete).
+
+### Added
+
+- **`dk memory forget` forgets by description and by request** (server v0.12.4). `--about <text>`
+  forgets the memories that say it (scored by the server's relevance model, `--min-score`,
+  `--limit`); `--request <message>` takes a user's request to forget as said, in any language,
+  and forgets what it means, or nothing when the message is not one (the server's reading is
+  shown: probability, threshold, the sentence that decided). `--until` keeps what was said after
+  the request, `--restorable` keeps a copy in the agent's trash, `--dry-run` lists what would be
+  forgotten. The memory id is now optional and several may be given; with `--about` /
+  `--request` only the listed ids that match are forgotten. The table lists the forgotten ids;
+  `--format json` prints the server's answer.
+- **`dk memory forget-detect <message>...`** (`POST /v1/memory/forget/detect`, v0.12.4): which
+  messages ask to forget something said, with the probability, in any language; `--file` reads
+  one message per line (`-` for stdin). Reads no memory.
+- **`dk memory trash <agent>`** and **`dk memory restore <agent> <id>`**: the agent's restorable
+  deletions (forgotten with `--restorable`, deduplicated or consolidated) with their content, and
+  putting one back exactly as it was stored (server v0.12.3; forgotten ones v0.12.4).
+- `dk memory store` says when the stored text reads as a request to forget (the store answer's
+  `forget_request`, v0.12.4) and how to act on it, and when the memory's session has ended.
+  `dk memory batch-store` says the same for each such memory (`forget_requests`), and lists the
+  items the server did not store as near-duplicates (`duplicates`, under the namespace's
+  `dedup_on_store`).
+- `dk memory recall` shows the agent's **standing instructions** that fit the query
+  (`instructions`, v0.12.4) and the **associated memories** (knowledge-graph neighbours of the
+  results, on by default since v0.12.4) in their own sections, and warns about parts of the
+  recall the server could not serve (`degraded`). `--include-associated[=false]` turns the
+  associated memories on or off (sent only when given). `--format json` carries
+  `instructions` and `associated_memories` too.
+- `dk memory get --projection-days N`: the memory's projected importance for the next N days
+  (v0.12.4).
+- `dk session end --auto-summarize[=false]`: store the session's summary memory for any session
+  with memories, or never (honoured since v0.12.4); a summary the server could not store yet
+  (`summary_pending`) is reported.
+- `dk memory extract` says which extractor ran (GLiNER and rules, or rules only) and shows the
+  server's warnings (a failed or partial model pass, v0.12.4).
+- `dk namespace policy get` says when the namespace has no stored policy (`stored: false`,
+  v0.12.4): what is shown is what its memories get.
+- Hints for the new answers of v0.12.4: a forget by `--about` / `--request` refused (`503`) while
+  the relevance model is not loaded; a name refused (`503` + `Retry-After`) while a deleted
+  namespace's state is removed; a change answered `409` because a later change of the same
+  record won; a change that could not be stored or logged (`503`); and the refusals of a Dakera
+  Cloud key.
+
+### Fixed
+
+- **`dk memory consolidate --dry-run` merged the memories.** The server has no consolidation
+  preview and never read `dry_run` (nor `memory_type`), so a "preview" deleted the sources. Both
+  options are now refused (exit 5) before anything is sent. The command takes `--ids` (the
+  memories to merge; without it the server picks similar ones), `--threshold` (sent only when
+  given: the server's default is 0.85, `dk` sent 0.8) and `--target-type`, and reports the merge
+  from the server's answer (`consolidated_memory`, `source_memory_ids`, `memories_removed`; it
+  printed zeros).
+- `dk keys delete` printed "deleted" before the server answered, also when it refused. Since
+  v0.12.4 a key revocation or deactivation, a quota and a backup deletion that the server applied
+  but could not store yet are answered `202`: `dk keys delete|deactivate`, `dk admin quotas-set`
+  and `dk admin backup-delete` say so instead of reporting a plain success.
+- `dk namespace policy set`: the TTL options' help gave the old per-type defaults (4 h, 30 d,
+  365 d, 730 d); since v0.12.4 a policy has no TTL by type unless one is set.
+- `dk --format json|compact memory store` and `memory batch-store` print one JSON document (the
+  store answer; the stored rows) and their notes on stderr; a success line came first on stdout.
+
+### Changed
+
+- `dakera-client` 0.12.2 → 0.12.3.
+
 ## [0.8.2] - 2026-10-22
 
 Support for Dakera server **v0.12.3**. Follows the engine's recall API correctness and security
